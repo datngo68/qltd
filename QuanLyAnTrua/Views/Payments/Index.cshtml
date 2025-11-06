@@ -1,0 +1,498 @@
+@model QuanLyAnTrua.Models.ViewModels.MonthlyReportViewModel
+
+@{
+    ViewData["Title"] = "Quản lý thanh toán";
+    var monthNames = new[] { "", "Tháng 1", "Tháng 2", "Tháng 3", "Tháng 4", "Tháng 5", "Tháng 6", "Tháng 7", "Tháng 8",
+"Tháng 9", "Tháng 10", "Tháng 11", "Tháng 12" };
+}
+
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-3 gap-3">
+    <h2 class="mb-0"><i class="bi bi-receipt"></i> Báo cáo tháng @Model.Month/@Model.Year</h2>
+    <div class="w-100 w-md-auto">
+        <form method="get" class="mb-3 mb-md-0">
+            <div class="d-flex flex-column flex-md-row gap-2">
+                @if (Context.Session.GetString("Role") == "SuperAdmin" && ViewBag.Groups != null)
+                {
+                    <select name="groupId" class="form-select" style="min-width: 150px;">
+                        <option value="">-- Tất cả nhóm --</option>
+                        @foreach (var group in (List<QuanLyAnTrua.Models.Group>)ViewBag.Groups)
+                        {
+                            <option value="@group.Id"
+                                selected="@(ViewBag.SelectedGroupId != null && ViewBag.SelectedGroupId == group.Id)">
+                                @group.Name
+                            </option>
+                        }
+                    </select>
+                }
+                <input type="number" name="year" value="@Model.Year" class="form-control" style="min-width: 100px;"
+                    min="2020" max="2100" />
+                <select name="month" class="form-select" style="min-width: 150px;">
+                    @for (int i = 1; i <= 12; i++)
+                    {
+                        <option value="@i" selected="@(i == Model.Month)">@monthNames[i]</option>
+                    }
+                </select>
+                @if (Context.Session.GetString("Role") == "SuperAdmin" && ViewBag.SelectedGroupId != null)
+                {
+                    <input type="hidden" name="groupId" value="@ViewBag.SelectedGroupId" />
+                }
+                <button type="submit" class="btn btn-primary">Xem</button>
+            </div>
+        </form>
+        <div class="btn-group-vertical btn-group-sm d-md-none w-100" role="group">
+            @if (Context.Session.GetString("Role") != "User")
+            {
+                <a asp-action="Create" asp-route-year="@Model.Year" asp-route-month="@Model.Month" class="btn btn-success">
+                    <i class="bi bi-plus-circle"></i> Thêm thanh toán
+                </a>
+            }
+            <a asp-controller="Reports" asp-action="ExportPdf" asp-route-year="@Model.Year"
+                asp-route-month="@Model.Month" class="btn btn-danger">
+                <i class="bi bi-file-pdf"></i> Xuất PDF
+            </a>
+            <a asp-controller="Reports" asp-action="ExportExcel" asp-route-year="@Model.Year"
+                asp-route-month="@Model.Month" class="btn btn-success">
+                <i class="bi bi-file-excel"></i> Xuất Excel
+            </a>
+            <a asp-controller="Reports" asp-action="ShareLink" asp-route-year="@Model.Year"
+                asp-route-month="@Model.Month" class="btn btn-info">
+                <i class="bi bi-share"></i> Chia sẻ
+            </a>
+            <a asp-controller="Reports" asp-action="SharedLinks" class="btn btn-outline-info">
+                <i class="bi bi-link-45deg"></i> Quản lý link
+            </a>
+        </div>
+        <div class="btn-group d-none d-md-inline-flex ms-2" role="group">
+            @if (Context.Session.GetString("Role") != "User")
+            {
+                <a asp-action="Create" asp-route-year="@Model.Year" asp-route-month="@Model.Month"
+                    class="btn btn-success btn-sm">
+                    <i class="bi bi-plus-circle"></i> Thêm thanh toán
+                </a>
+            }
+            <a asp-controller="Reports" asp-action="ExportPdf" asp-route-year="@Model.Year"
+                asp-route-month="@Model.Month" class="btn btn-danger btn-sm">
+                <i class="bi bi-file-pdf"></i> Xuất PDF
+            </a>
+            <a asp-controller="Reports" asp-action="ExportExcel" asp-route-year="@Model.Year"
+                asp-route-month="@Model.Month" class="btn btn-success btn-sm">
+                <i class="bi bi-file-excel"></i> Xuất Excel
+            </a>
+            <a asp-controller="Reports" asp-action="ShareLink" asp-route-year="@Model.Year"
+                asp-route-month="@Model.Month" class="btn btn-info btn-sm">
+                <i class="bi bi-share"></i> Chia sẻ
+            </a>
+            <a asp-controller="Reports" asp-action="SharedLinks" class="btn btn-outline-info btn-sm">
+                <i class="bi bi-link-45deg"></i> Quản lý link
+            </a>
+        </div>
+    </div>
+</div>
+
+@* Hiển thị "Bạn cần trả cho" nếu có CurrentUserId *@
+@if (Model.CurrentUserId.HasValue && Model.CreditorSummaries.Any(c => c.DebtDetails.Any(d => d.DebtorId ==
+Model.CurrentUserId.Value)))
+{
+    var myDebts = Model.CreditorSummaries
+    .Select(c => new
+    {
+        Creditor = c,
+        MyDebtDetails = c.DebtDetails.Where(d => d.DebtorId == Model.CurrentUserId.Value && d.RemainingAmount > 0).ToList(),
+        TotalMyDebt = c.DebtDetails.Where(d => d.DebtorId == Model.CurrentUserId.Value).Sum(d => d.RemainingAmount)
+    })
+    .Where(x => x.MyDebtDetails.Any() && x.TotalMyDebt > 0)
+    .ToList();
+
+    if (myDebts.Any())
+    {
+        <h3 class="mb-3"><i class="bi bi-credit-card-2-front"></i> Bạn cần trả cho</h3>
+        <div class="row mb-4">
+            @foreach (var myDebt in myDebts)
+            {
+                <div class="col-12 col-md-6 mb-3">
+                    <div class="card border-warning">
+                        <div class="card-header bg-warning text-dark">
+                            <h5 class="mb-0"><i class="bi bi-person-check"></i> @myDebt.Creditor.CreditorName</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-8">
+                                    <p class="mb-2">
+                                        <strong>Tổng số tiền cần trả: </strong>
+                                        <span class="text-danger fw-bold fs-5">@myDebt.TotalMyDebt.ToString("N0") đ</span>
+                                    </p>
+
+                                    @if (!string.IsNullOrEmpty(myDebt.Creditor.BankName) ||
+                                                            !string.IsNullOrEmpty(myDebt.Creditor.BankAccount))
+                                    {
+                                        <p class="mb-2">
+                                            <strong><i class="bi bi-bank"></i> Thông tin ngân hàng:</strong><br />
+                                            @if (!string.IsNullOrEmpty(myDebt.Creditor.BankName))
+                                            {
+                                                <span>Ngân hàng: @myDebt.Creditor.BankName</span>
+
+                                                <br />
+                                            }
+                                            @if (!string.IsNullOrEmpty(myDebt.Creditor.BankAccount))
+                                            {
+                                                <span>Số tài khoản: <strong>@myDebt.Creditor.BankAccount</strong></span>
+
+                                                <br />
+                                            }
+                                            @if (!string.IsNullOrEmpty(myDebt.Creditor.AccountHolderName))
+                                            {
+                                                <span>Chủ tài khoản: @myDebt.Creditor.AccountHolderName</span>
+                                            }
+                                        </p>
+                                    }
+
+                                    <details class="mb-2">
+                                        <summary class="btn btn-sm btn-outline-info">Xem chi tiết các khoản nợ</summary>
+                                        <ul class="mt-2">
+                                            @foreach (var detail in myDebt.MyDebtDetails.OrderBy(d => d.ExpenseDate))
+                                            {
+                                                <li>
+                                                    <small>@detail.ExpenseDate.ToString("dd/MM/yyyy"):
+                                                        @if (detail.Amount != detail.RemainingAmount)
+                                                        {
+                                                            <span>@detail.RemainingAmount.ToString("N0") đ (ban đầu:
+                                                                @detail.Amount.ToString("N0") đ)</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span>@detail.RemainingAmount.ToString("N0") đ</span>
+                                                        }
+                                                    </small>
+                                                    @if (!string.IsNullOrEmpty(detail.Description))
+                                                    {
+                                                        <small class="text-muted"> - @detail.Description</small>
+                                                    }
+                                                </li>
+                                            }
+                                        </ul>
+                                    </details>
+                                </div>
+                                <div class="col-md-4 text-center">
+                                    @if (!string.IsNullOrEmpty(myDebt.Creditor.BankName) &&
+                                                            !string.IsNullOrEmpty(myDebt.Creditor.BankAccount))
+                                    {
+                                        var qrCodeUrl = Url.Action("GenerateQRCode", "Payments", new
+                                        {
+                                            bankName = myDebt.Creditor.BankName,
+                                            bankAccount = myDebt.Creditor.BankAccount,
+                                            accountHolderName = myDebt.Creditor.AccountHolderName ?? "",
+                                            amount = myDebt.TotalMyDebt
+                                        });
+                                        <img src="@qrCodeUrl" alt="QR Code" class="img-fluid" style="max-width: 150px; cursor: pointer;"
+                                            onclick="showQRCodeModal('@myDebt.Creditor.CreditorName', '@myDebt.TotalMyDebt.ToString("N0")', '@qrCodeUrl')" />
+                                        <br />
+                                        <small class="text-muted">Mã QR chuyển khoản</small>
+                                        <br />
+                                        <button class="btn btn-sm btn-outline-primary mt-2"
+                                            onclick="showQRCodeModal('@myDebt.Creditor.CreditorName', '@myDebt.TotalMyDebt.ToString("N0")', '@qrCodeUrl')">
+                                            <i class="bi bi-qr-code-scan"></i> Xem QR lớn
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <small class="text-muted">Chưa có thông tin ngân hàng</small>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+}
+
+<div class="table-responsive">
+    <table id="paymentsTable" class="table table-striped table-hover" style="min-width: 900px;">
+        <thead class="table-light">
+            <tr>
+                <th>Người dùng</th>
+                <th>Phải trả</th>
+                <th>Đã chi</th>
+                <th>Nợ thực tế</th>
+                <th>Đã thanh toán</th>
+                <th>Còn lại</th>
+                <th>Trạng thái</th>
+                <th>Thao tác</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var debt in Model.UserDebts)
+            {
+                <tr>
+                    <td>
+                        <strong>@debt.UserName</strong>
+                        @if (!string.IsNullOrEmpty(debt.BankName) || !string.IsNullOrEmpty(debt.BankAccount))
+                        {
+                            <br />
+                            <small class="text-muted">
+                                <i class="bi bi-bank"></i>
+                                @if (!string.IsNullOrEmpty(debt.BankName))
+                                {
+                                    <span>@debt.BankName</span>
+                                }
+                                @if (!string.IsNullOrEmpty(debt.BankAccount))
+                                {
+                                    <span> - @debt.BankAccount</span>
+                                }
+                                @if (!string.IsNullOrEmpty(debt.AccountHolderName))
+                                {
+                                    <span> - @debt.AccountHolderName</span>
+                                }
+                            </small>
+                        }
+                    </td>
+
+                    <td>@debt.TotalAmount.ToString("N0") đ</td>
+                    <td>@debt.PaidAsPayer.ToString("N0") đ</td>
+                    <td>
+                        @if (debt.ActualDebt > 0)
+                        {
+                            <span class="text-danger">@debt.ActualDebt.ToString("N0") đ</span>
+                        }
+                        else if (debt.ActualDebt < 0)
+                        {
+                            <span class="text-success">@Math.Abs(debt.ActualDebt).ToString("N0") đ (được nợ)</span>
+                        }
+                        else
+                        {
+                            <span>0 đ</span>
+                        }
+                    </td>
+                    <td>@debt.PaidAmount.ToString("N0") đ</td>
+                    <td>
+                        @if (debt.RemainingAmount > 0)
+                        {
+                            <span class="text-danger fw-bold">@debt.RemainingAmount.ToString("N0") đ</span>
+                        }
+                        else if (debt.RemainingAmount < 0)
+                        {
+                            <span class="text-success">@Math.Abs(debt.RemainingAmount).ToString("N0") đ (thừa)</span>
+                        }
+                        else
+                        {
+                            <span>0 đ</span>
+                        }
+                    </td>
+                    <td>
+                        @if (debt.IsFullyPaid)
+                        {
+                            <span class="badge bg-success">Đã thanh toán</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-warning">Còn nợ</span>
+                        }
+                    </td>
+                    <td>
+                        @if (Context.Session.GetString("Role") != "User")
+                        {
+                            <a asp-action="Create" asp-route-year="@Model.Year" asp-route-month="@Model.Month"
+                                asp-route-userId="@debt.UserId" class="btn btn-sm btn-primary">
+                                <span class="d-none d-md-inline">Thêm thanh toán</span>
+                                <span class="d-md-none">Thêm</span>
+                            </a>
+                        }
+                        else
+                        {
+                            <span class="text-muted">-</span>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@if (Model.UserDebts.Any(u => u.DebtDetails.Any(d => d.RemainingAmount > 0)))
+{
+    <h3 class="mt-4 mb-3"><i class="bi bi-arrow-left-right"></i> Chi tiết ai nợ ai (còn nợ)</h3>
+    <div class="table-responsive">
+        <table id="debtDetailsTable" class="table table-striped table-bordered" style="min-width: 700px;">
+            <thead class="table-light">
+                <tr>
+                    <th>Người nợ</th>
+                    <th>Nợ</th>
+                    <th>Người được nợ</th>
+                    <th>Số tiền ban đầu</th>
+                    <th>Số tiền còn nợ</th>
+                    <th>Ngày</th>
+                    <th>Mô tả</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var debt in Model.UserDebts)
+                {
+                    @foreach (var debtDetail in debt.DebtDetails.Where(d => d.RemainingAmount > 0))
+                    {
+                        <tr>
+                            <td><strong>@debtDetail.DebtorName</strong></td>
+                            <td><i class="bi bi-arrow-right text-danger"></i></td>
+                            <td><strong>@debtDetail.CreditorName</strong></td>
+                            <td>@debtDetail.Amount.ToString("N0") đ</td>
+                            <td class="text-danger fw-bold">@debtDetail.RemainingAmount.ToString("N0") đ</td>
+                            <td>@debtDetail.ExpenseDate.ToString("dd/MM/yyyy")</td>
+                            <td>@(debtDetail.Description ?? "-")</td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@if (Model.UserDebts.Any(u => u.Payments.Any()))
+{
+    <h3 class="mt-4 mb-3"><i class="bi bi-clock-history"></i> Lịch sử thanh toán</h3>
+    <div class="table-responsive">
+        <table id="paymentHistoryTable" class="table table-striped" style="min-width: 600px;">
+            <thead class="table-light">
+                <tr>
+                    <th>Người thanh toán</th>
+                    <th>Số tiền</th>
+                    <th>Ngày thanh toán</th>
+                    <th>Ghi chú</th>
+                    <th>Thao tác</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var debt in Model.UserDebts)
+                {
+                    @foreach (var payment in debt.Payments.OrderByDescending(p => p.PaidDate))
+                    {
+                        <tr>
+                            <td>@payment.UserName</td>
+                            <td>@payment.PaidAmount.ToString("N0") đ</td>
+                            <td>@payment.PaidDate.ToString("dd/MM/yyyy")</td>
+                            <td>@(payment.Notes ?? "-")</td>
+                            <td>
+                                <form asp-action="Delete" asp-route-id="@payment.Id" method="post" class="d-inline"
+                                    onsubmit="return confirm('Bạn có chắc chắn muốn xóa thanh toán này?');">
+                                    <input type="hidden" name="__RequestVerificationToken" value="@Html.AntiForgeryToken()" />
+                                    <button type="submit" class="btn btn-sm btn-danger">
+                                        <i class="bi bi-trash"></i> <span class="d-none d-md-inline">Xóa</span>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+<h3 class="mt-4 mb-3"><i class="bi bi-receipt-cutoff"></i> Chi tiết chi phí</h3>
+<div class="table-responsive">
+    <table id="expensesDetailsTable" class="table table-striped" style="min-width: 700px;">
+        <thead class="table-light">
+            <tr>
+                <th>Ngày</th>
+                <th>Số tiền</th>
+                <th>Người chi</th>
+                <th>Người ăn</th>
+                <th>Số tiền/người</th>
+                <th>Mô tả</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var expense in Model.Expenses)
+            {
+                <tr>
+                    <td>@expense.ExpenseDate.ToString("dd/MM/yyyy")</td>
+                    <td>@expense.Amount.ToString("N0") đ</td>
+                    <td>@expense.PayerName</td>
+                    <td>@string.Join(", ", expense.ParticipantNames)</td>
+                    <td>@expense.AmountPerPerson.ToString("N0") đ</td>
+                    <td>@(expense.Description ?? "-")</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+<!-- Modal để hiển thị QR Code lớn -->
+<div class="modal fade" id="qrCodeModal" tabindex="-1" aria-labelledby="qrCodeModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="qrCodeModalLabel">Mã QR chuyển khoản</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center">
+                <p class="mb-2"><strong id="qrCodeCreditorName"></strong></p>
+                <p class="mb-3">Số tiền: <span class="text-danger fw-bold" id="qrCodeAmount"></span> đ</p>
+                <img id="qrCodeImage" src="" alt="QR Code" class="img-fluid" style="max-width: 300px;">
+                <p class="mt-3 text-muted small">Quét mã QR để chuyển khoản</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            // Bảng chính - Quản lý thanh toán
+            $('#paymentsTable').DataTable({
+                language: {
+                    url: 'https://cdn.datatables.net/plug-ins/1.13.7/i18n/vi.json'
+                },
+                pageLength: 25,
+                columnDefs: [
+                    { orderable: false, targets: 7 } // Tắt sắp xếp cho cột Thao tác
+                ]
+            });
+
+            // Bảng chi tiết ai nợ ai
+            if ($('#debtDetailsTable').length) {
+                $('#debtDetailsTable').DataTable({
+                    language: {
+                        url: 'https://cdn.datatables.net/plug-ins/1.13.7/i18n/vi.json'
+                    },
+                    pageLength: 25,
+                    order: [[5, 'desc']] // Sắp xếp theo ngày giảm dần
+                });
+            }
+
+            // Bảng lịch sử thanh toán
+            if ($('#paymentHistoryTable').length) {
+                $('#paymentHistoryTable').DataTable({
+                    language: {
+                        url: 'https://cdn.datatables.net/plug-ins/1.13.7/i18n/vi.json'
+                    },
+                    pageLength: 25,
+                    order: [[2, 'desc']], // Sắp xếp theo ngày thanh toán giảm dần
+                    columnDefs: [
+                        { orderable: false, targets: 4 } // Tắt sắp xếp cho cột Thao tác
+                    ]
+                });
+            }
+
+            // Bảng chi tiết chi phí
+            $('#expensesDetailsTable').DataTable({
+                language: {
+                    url: 'https://cdn.datatables.net/plug-ins/1.13.7/i18n/vi.json'
+                },
+                pageLength: 25,
+                order: [[0, 'desc']] // Sắp xếp theo ngày giảm dần
+            });
+
+            function showQRCodeModal(creditorName, amount, qrCodeUrl) {
+                document.getElementById('qrCodeCreditorName').textContent = 'Chuyển tiền cho: ' + creditorName;
+                document.getElementById('qrCodeAmount').textContent = amount;
+                document.getElementById('qrCodeImage').src = qrCodeUrl;
+                var modal = new bootstrap.Modal(document.getElementById('qrCodeModal'));
+                modal.show();
+            }
+            window.showQRCodeModal = showQRCodeModal;
+        });
+    </script>
+}

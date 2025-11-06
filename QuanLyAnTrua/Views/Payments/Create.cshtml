@@ -1,0 +1,117 @@
+@model QuanLyAnTrua.Models.MonthlyPayment
+
+@{
+    ViewData["Title"] = "Thêm thanh toán";
+}
+
+<h2>Thêm thanh toán</h2>
+<hr />
+
+<div class="row">
+    <div class="col-12 col-md-6 col-lg-4">
+        <form asp-action="Create" method="post" novalidate>
+            <div asp-validation-summary="All" class="text-danger"></div>
+
+            <div class="mb-3">
+                <label asp-for="UserId" class="form-label">
+                    <i class="bi bi-person"></i> Người thanh toán <span class="text-danger">*</span>
+                </label>
+                <select name="UserId" id="UserId" class="form-select" required>
+                    <option value="">-- Chọn người thanh toán --</option>
+                    @if (ViewBag.Users != null)
+                    {
+                        var users = ViewBag.Users as IEnumerable<QuanLyAnTrua.Models.User>;
+                        @if (users != null)
+                        {
+                            @foreach (var user in users)
+                            {
+                                var isSelected = Model.UserId == user.Id;
+                                <option value="@user.Id" selected="@isSelected">@user.Name</option>
+                            }
+                        }
+                    }
+                </select>
+                @if (ViewData.ModelState["UserId"]?.Errors?.Count > 0)
+                {
+                    <span class="text-danger d-block">@ViewData.ModelState["UserId"]!.Errors[0].ErrorMessage</span>
+                }
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="CreditorId" class="form-label">
+                    <i class="bi bi-person-check"></i> Người được thanh toán (tùy chọn)
+                </label>
+                <select name="CreditorId" id="CreditorId" class="form-select">
+                    <option value="">-- Không chỉ định (áp dụng FIFO) --</option>
+                    @if (ViewBag.Creditors != null)
+                    {
+                        var creditors = ViewBag.Creditors as IEnumerable<QuanLyAnTrua.Models.User>;
+                        @if (creditors != null)
+                        {
+                            @foreach (var creditor in creditors)
+                            {
+                                var isSelected = Model.CreditorId == creditor.Id;
+                                <option value="@creditor.Id" selected="@isSelected">@creditor.Name</option>
+                            }
+                        }
+                    }
+                </select>
+                <small class="form-text text-muted">Nếu chọn, thanh toán sẽ chỉ trừ vào nợ của người này. Nếu không
+                    chọn, sẽ trừ theo thứ tự thời gian (FIFO).</small>
+                @if (ViewData.ModelState["CreditorId"]?.Errors?.Count > 0)
+                {
+                    <span class="text-danger d-block">@ViewData.ModelState["CreditorId"]!.Errors[0].ErrorMessage</span>
+                }
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-12 col-md-6">
+                    <label asp-for="Year" class="form-label"></label>
+                    <input asp-for="Year" class="form-control" type="number" min="2020" max="2100" />
+                    <span asp-validation-for="Year" class="text-danger"></span>
+                </div>
+                <div class="col-12 col-md-6">
+                    <label asp-for="Month" class="form-label"></label>
+                    <input asp-for="Month" class="form-control" type="number" min="1" max="12" />
+                    <span asp-validation-for="Month" class="text-danger"></span>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="PaidAmount" class="form-label"></label>
+                <input asp-for="PaidAmount" class="form-control" type="number" step="0.01" min="0.01" />
+                <span asp-validation-for="PaidAmount" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="PaidDate" class="form-label"></label>
+                <input asp-for="PaidDate" class="form-control" type="date" />
+                <span asp-validation-for="PaidDate" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="Notes" class="form-label"></label>
+                <textarea asp-for="Notes" class="form-control" rows="3"></textarea>
+                <span asp-validation-for="Notes" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3 d-flex flex-column flex-md-row gap-2">
+                <button type="submit" class="btn btn-primary w-100 w-md-auto">Thêm</button>
+                <a asp-action="Index" asp-route-year="@Model.Year" asp-route-month="@Model.Month"
+                    class="btn btn-secondary w-100 w-md-auto">Quay lại</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // Disable unobtrusive validation for this form
+        $(document).ready(function () {
+            var form = $('form');
+            form.removeData('validator');
+            form.removeData('unobtrusiveValidation');
+            $.validator.unobtrusive.parse = function () { return this; };
+        });
+    </script>
+}

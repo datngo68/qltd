@@ -1,0 +1,75 @@
+@model QuanLyAnTrua.Models.MonthlyPayment
+
+@{
+    ViewData["Title"] = "Sửa thanh toán";
+}
+
+<h2>Sửa thanh toán</h2>
+<hr />
+
+<div class="row">
+    <div class="col-12 col-md-6 col-lg-4">
+        <form asp-action="Edit">
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            <input type="hidden" asp-for="Id" />
+            
+            <div class="mb-3">
+                <label asp-for="UserId" class="form-label">Người thanh toán</label>
+                <select asp-for="UserId" class="form-select" asp-items="@(new SelectList(ViewBag.Users as IEnumerable<QuanLyAnTrua.Models.User>, "Id", "Name"))">
+                    <option value="">-- Chọn người thanh toán --</option>
+                </select>
+                <span asp-validation-for="UserId" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="CreditorId" class="form-label">Người được thanh toán (tùy chọn)</label>
+                <select asp-for="CreditorId" class="form-select" asp-items="@(new SelectList(ViewBag.Creditors as IEnumerable<QuanLyAnTrua.Models.User>, "Id", "Name", Model.CreditorId))">
+                    <option value="">-- Không chỉ định (áp dụng FIFO) --</option>
+                </select>
+                <small class="form-text text-muted">Nếu chọn, thanh toán sẽ chỉ trừ vào nợ của người này. Nếu không chọn, sẽ trừ theo thứ tự thời gian (FIFO).</small>
+                <span asp-validation-for="CreditorId" class="text-danger"></span>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-12 col-md-6">
+                    <label asp-for="Year" class="form-label"></label>
+                    <input asp-for="Year" class="form-control" type="number" min="2020" max="2100" />
+                    <span asp-validation-for="Year" class="text-danger"></span>
+                </div>
+                <div class="col-12 col-md-6">
+                    <label asp-for="Month" class="form-label"></label>
+                    <input asp-for="Month" class="form-control" type="number" min="1" max="12" />
+                    <span asp-validation-for="Month" class="text-danger"></span>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="PaidAmount" class="form-label"></label>
+                <input asp-for="PaidAmount" class="form-control" type="number" step="0.01" min="0.01" />
+                <span asp-validation-for="PaidAmount" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="PaidDate" class="form-label"></label>
+                <input asp-for="PaidDate" class="form-control" type="date" />
+                <span asp-validation-for="PaidDate" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="Notes" class="form-label"></label>
+                <textarea asp-for="Notes" class="form-control" rows="3"></textarea>
+                <span asp-validation-for="Notes" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3 d-flex flex-column flex-md-row gap-2">
+                <button type="submit" class="btn btn-primary w-100 w-md-auto">Lưu</button>
+                <a asp-action="Index" asp-route-year="@Model.Year" asp-route-month="@Model.Month" class="btn btn-secondary w-100 w-md-auto">Quay lại</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+}
+

@@ -1,0 +1,180 @@
+@{
+    ViewData["Title"] = "Chia sẻ báo cáo";
+    var year = ViewBag.Year ?? DateTime.Now.Year;
+    var month = ViewBag.Month ?? DateTime.Now.Month;
+    var reportType = ViewBag.ReportType ?? "Group";
+    var userId = ViewBag.UserId as int?;
+}
+
+<h2><i class="bi bi-share"></i> Chia sẻ báo cáo</h2>
+<hr />
+
+@if (TempData["ShareUrl"] != null)
+{
+    <div class="alert alert-success">
+        <h5><i class="bi bi-check-circle"></i> Link chia sẻ đã được tạo!</h5>
+        <div class="input-group mb-2">
+            <input type="text" class="form-control" id="shareUrl" value="@TempData["ShareUrl"]" readonly>
+            <button class="btn btn-outline-secondary" type="button" onclick="copyToClipboard()">
+                <i class="bi bi-clipboard"></i> Copy
+            </button>
+        </div>
+        <small class="text-muted">Chia sẻ link này cho người khác để họ xem báo cáo mà không cần đăng nhập.</small>
+    </div>
+}
+
+<div class="row">
+    <div class="col-12 col-md-6">
+        <form asp-action="ShareLink" method="post">
+            <div asp-validation-summary="All" class="text-danger"></div>
+
+            <div class="mb-3">
+                <label class="form-label">
+                    <i class="bi bi-file-earmark-text"></i> Loại báo cáo <span class="text-danger">*</span>
+                </label>
+                <select name="reportType" id="reportType" class="form-select" required onchange="toggleUserSelection()">
+                    @if (reportType == "Group")
+                    {
+                        <option value="Group" selected>Báo cáo cả nhóm</option>
+                        <option value="User">Báo cáo một người dùng</option>
+                    }
+                    else
+                    {
+                        <option value="Group">Báo cáo cả nhóm</option>
+                        <option value="User" selected>Báo cáo một người dùng</option>
+                    }
+                </select>
+            </div>
+
+            <div class="mb-3" id="userSelection" style="display: @(reportType == "User" ? "block" : "none");">
+                <label for="userId" class="form-label">
+                    <i class="bi bi-person"></i> Chọn người dùng <span class="text-danger">*</span>
+                </label>
+                <select name="userId" id="userId" class="form-select">
+                    <option value="">-- Chọn người dùng --</option>
+                    @if (ViewBag.Users != null)
+                    {
+                        var users = ViewBag.Users as IEnumerable<QuanLyAnTrua.Models.User>;
+                        @if (users != null)
+                        {
+                            @foreach (var user in users)
+                            {
+                                @if (userId == user.Id)
+                                {
+                                    <option value="@user.Id" selected>@user.Name</option>
+                                }
+                                else
+                                {
+                                    <option value="@user.Id">@user.Name</option>
+                                }
+                            }
+                        }
+                    }
+                </select>
+            </div>
+
+            <div class="mb-3" id="groupSelection" style="display: @(reportType == "Group" ? "block" : "none");">
+                <label for="groupId" class="form-label">
+                    <i class="bi bi-people"></i> Chọn nhóm <span class="text-danger">*</span>
+                </label>
+                <select name="groupId" id="groupId" class="form-select">
+                    <option value="">-- Chọn nhóm --</option>
+                    @if (ViewBag.Groups != null)
+                    {
+                        var groups = ViewBag.Groups as IEnumerable<QuanLyAnTrua.Models.Group>;
+                        var currentGroupId = ViewBag.GroupId as int?;
+                        @if (groups != null)
+                        {
+                            @foreach (var group in groups)
+                            {
+                                @if (currentGroupId == group.Id)
+                                {
+                                    <option value="@group.Id" selected>@group.Name</option>
+                                }
+                                else
+                                {
+                                    <option value="@group.Id">@group.Name</option>
+                                }
+                            }
+                        }
+                    }
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label for="expireDays" class="form-label">
+                    <i class="bi bi-calendar-x"></i> Thời hạn (ngày) - Để trống nếu không giới hạn
+                </label>
+                <input type="number" class="form-control" id="expireDays" name="expireDays" min="1" max="365" />
+                <small class="text-muted">Link sẽ hết hạn sau số ngày được chỉ định. Để trống nếu muốn link không bao
+                    giờ hết hạn.</small>
+            </div>
+
+            <div class="mb-3 d-flex flex-column flex-md-row gap-2">
+                <button type="submit" class="btn btn-primary w-100 w-md-auto">
+                    <i class="bi bi-link-45deg"></i> Tạo link chia sẻ
+                </button>
+                <a asp-controller="Payments" asp-action="Index" asp-route-year="@year" asp-route-month="@month"
+                    class="btn btn-secondary w-100 w-md-auto">
+                    <i class="bi bi-arrow-left"></i> Quay lại
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function toggleUserSelection() {
+            var reportType = document.getElementById('reportType').value;
+            var userSelection = document.getElementById('userSelection');
+            var groupSelection = document.getElementById('groupSelection');
+            var userIdSelect = document.getElementById('userId');
+            var groupIdSelect = document.getElementById('groupId');
+
+            if (reportType === 'User') {
+                userSelection.style.display = 'block';
+                groupSelection.style.display = 'none';
+                if (userIdSelect) {
+                    userIdSelect.required = true;
+                    userIdSelect.removeAttribute('disabled');
+                }
+                if (groupIdSelect) {
+                    groupIdSelect.required = false;
+                    groupIdSelect.value = '';
+                    groupIdSelect.setAttribute('disabled', 'disabled');
+                }
+            } else {
+                userSelection.style.display = 'none';
+                groupSelection.style.display = 'block';
+                if (userIdSelect) {
+                    userIdSelect.required = false;
+                    userIdSelect.value = '';
+                    userIdSelect.setAttribute('disabled', 'disabled');
+                }
+                if (groupIdSelect) {
+                    groupIdSelect.required = true;
+                    groupIdSelect.removeAttribute('disabled');
+                }
+            }
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', function () {
+            toggleUserSelection();
+        });
+
+        function copyToClipboard() {
+            var shareUrl = document.getElementById('shareUrl');
+            shareUrl.select();
+            shareUrl.setSelectionRange(0, 99999); // For mobile devices
+            navigator.clipboard.writeText(shareUrl.value).then(function () {
+                alert('Đã copy link vào clipboard!');
+            }, function () {
+                // Fallback for older browsers
+                document.execCommand('copy');
+                alert('Đã copy link vào clipboard!');
+            });
+        }
+    </script>
+}

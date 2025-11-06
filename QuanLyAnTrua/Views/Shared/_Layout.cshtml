@@ -1,0 +1,266 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - Quản lý ăn trưa</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/QuanLyAnTrua.styles.css" asp-append-version="true" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <!-- DataTables CSS -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
+</head>
+
+<body>
+    <header>
+        <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
+            <div class="container-fluid">
+                <a class="navbar-brand" asp-area="" asp-controller="Home" asp-action="Index">Quản lý ăn trưa</a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse"
+                    aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
+                    <ul class="navbar-nav flex-grow-1">
+                        <li class="nav-item">
+                            <a class="nav-link text-dark" asp-area="" asp-controller="Home" asp-action="Index">
+                                <i class="bi bi-speedometer2"></i> Dashboard
+                            </a>
+                        </li>
+                        @if (Context.Session.GetString("Role") == "SuperAdmin")
+                        {
+                            <li class="nav-item">
+                                <a class="nav-link text-dark" asp-area="" asp-controller="Groups" asp-action="Index">
+                                    <i class="bi bi-people-fill"></i> Nhóm
+                                </a>
+                            </li>
+                        }
+                        @if (Context.Session.GetString("Role") != "User")
+                        {
+                            <li class="nav-item">
+                                <a class="nav-link text-dark" asp-area="" asp-controller="Users" asp-action="Index">
+                                    <i class="bi bi-people"></i> Người dùng
+                                </a>
+                            </li>
+                        }
+                        <li class="nav-item">
+                            <a class="nav-link text-dark" asp-area="" asp-controller="Expenses" asp-action="Index">
+                                <i class="bi bi-cash-coin"></i> Chi phí
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link text-dark" asp-area="" asp-controller="Payments" asp-action="Index">
+                                <i class="bi bi-receipt"></i> Thanh toán
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link text-dark" asp-area="" asp-controller="Reports"
+                                asp-action="PendingPayments" id="pendingPaymentsLink">
+                                <i class="bi bi-clock-history"></i> Chờ xác nhận
+                                @await Component.InvokeAsync("PendingPaymentsCount")
+                                <span id="pendingPaymentsBadge" style="display: none;"></span>
+                            </a>
+                        </li>
+                    </ul>
+                    <ul class="navbar-nav">
+                        @if (Context.Session.GetString("FullName") != null)
+                        {
+                            <li class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle text-dark" href="#" id="navbarDropdown" role="button"
+                                    data-bs-toggle="dropdown">
+                                    <i class="bi bi-person-circle"></i> @Context.Session.GetString("FullName")
+                                </a>
+                                <ul class="dropdown-menu dropdown-menu-end">
+                                    <li>
+                                        <a class="dropdown-item" asp-controller="Account" asp-action="Profile">
+                                            <i class="bi bi-person-gear"></i> Thông tin tài khoản
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <hr class="dropdown-divider">
+                                    </li>
+                                    <li>
+                                        <form asp-controller="Account" asp-action="Logout" method="post" class="d-inline">
+                                            <button type="submit" class="dropdown-item">
+                                                <i class="bi bi-box-arrow-right"></i> Đăng xuất
+                                            </button>
+                                        </form>
+                                    </li>
+                                </ul>
+                            </li>
+                        }
+                    </ul>
+                </div>
+            </div>
+        </nav>
+    </header>
+    <div class="container">
+        <main role="main" class="pb-3">
+            @if (TempData["SuccessMessage"] != null)
+            {
+                <div class="alert alert-success alert-dismissible fade show" role="alert">
+                    @TempData["SuccessMessage"]
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            }
+            @if (TempData["ErrorMessage"] != null)
+            {
+                <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                    @TempData["ErrorMessage"]
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            }
+            @RenderBody()
+        </main>
+    </div>
+
+    <footer class="border-top footer text-muted">
+        <div class="container">
+            &copy; 2025 - QuanLyAnTrua - <a asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
+        </div>
+    </footer>
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    <!-- DataTables JS -->
+    <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
+
+    <!-- Real-time pending payments count -->
+    <script>
+        (function () {
+            let lastCount = 0;
+            let notificationShown = false;
+
+            // Hàm cập nhật badge
+            function updatePendingPaymentsBadge(count) {
+                // Lấy badge từ ViewComponent hoặc tạo mới
+                const link = document.getElementById('pendingPaymentsLink');
+                if (!link) return;
+
+                // Tìm badge hiện tại (từ ViewComponent)
+                let existingBadge = link.querySelector('.badge.bg-danger');
+
+                if (count > 0) {
+                    if (!existingBadge) {
+                        // Tạo badge mới nếu chưa có
+                        existingBadge = document.createElement('span');
+                        existingBadge.className = 'badge bg-danger rounded-pill ms-1';
+                        link.appendChild(existingBadge);
+                    }
+
+                    // Cập nhật số lượng
+                    existingBadge.textContent = count;
+
+                    // Thêm animation khi có thay đổi
+                    if (count !== lastCount && lastCount >= 0) {
+                        existingBadge.style.animation = 'pulse 0.5s ease-in-out';
+                    }
+
+                    // Thông báo khi có payment mới
+                    if (count > lastCount && lastCount >= 0 && !notificationShown) {
+                        showNotification('Có ' + (count - lastCount) + ' thanh toán mới cần xác nhận!');
+                        notificationShown = true;
+                        setTimeout(() => { notificationShown = false; }, 5000);
+                    }
+                } else {
+                    // Xóa badge nếu count = 0
+                    if (existingBadge) {
+                        existingBadge.remove();
+                    }
+                }
+
+                lastCount = count;
+            }
+
+            // Khởi tạo lastCount từ badge hiện tại (nếu có)
+            document.addEventListener('DOMContentLoaded', function () {
+                const link = document.getElementById('pendingPaymentsLink');
+                if (link) {
+                    const existingBadge = link.querySelector('.badge.bg-danger');
+                    if (existingBadge) {
+                        lastCount = parseInt(existingBadge.textContent) || 0;
+                    }
+                }
+            });
+
+            // Hàm hiển thị thông báo
+            function showNotification(message) {
+                // Kiểm tra xem browser có hỗ trợ Notification API không
+                if ('Notification' in window && Notification.permission === 'granted') {
+                    new Notification('Thanh toán cần xác nhận', {
+                        body: message,
+                        icon: '/favicon.ico',
+                        badge: '/favicon.ico'
+                    });
+                } else if ('Notification' in window && Notification.permission !== 'denied') {
+                    // Yêu cầu quyền thông báo
+                    Notification.requestPermission().then(function (permission) {
+                        if (permission === 'granted') {
+                            new Notification('Thanh toán cần xác nhận', {
+                                body: message,
+                                icon: '/favicon.ico',
+                                badge: '/favicon.ico'
+                            });
+                        }
+                    });
+                }
+
+                // Hiển thị thông báo trên trang (toast notification)
+                const toast = document.createElement('div');
+                toast.className = 'alert alert-info alert-dismissible fade show position-fixed top-0 end-0 m-3';
+                toast.style.zIndex = '9999';
+                toast.style.minWidth = '300px';
+                toast.innerHTML = `
+                    <i class="bi bi-bell-fill"></i> ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                `;
+                document.body.appendChild(toast);
+
+                // Tự động ẩn sau 5 giây
+                setTimeout(() => {
+                    toast.remove();
+                }, 5000);
+            }
+
+            // Hàm lấy số lượng pending payments
+            async function fetchPendingPaymentsCount() {
+                try {
+                    const response = await fetch('@Url.Action("GetPendingPaymentsCount", "Reports")');
+                    if (response.ok) {
+                        const data = await response.json();
+                        updatePendingPaymentsBadge(data.count);
+                    }
+                } catch (error) {
+                    console.error('Error fetching pending payments count:', error);
+                }
+            }
+
+            // Load lần đầu khi trang load
+            document.addEventListener('DOMContentLoaded', function () {
+                fetchPendingPaymentsCount();
+
+                // Polling mỗi 30 giây
+                setInterval(fetchPendingPaymentsCount, 30000);
+            });
+
+            // Cập nhật khi tab được focus lại
+            document.addEventListener('visibilitychange', function () {
+                if (!document.hidden) {
+                    fetchPendingPaymentsCount();
+                }
+            });
+        })();
+
+        // CSS animation cho pulse effect
+        const style = document.createElement('style');
+        style.textContent = '@@keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.2); } 100% { transform: scale(1); } }';
+        document.head.appendChild(style);
+    </script>
+
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+
+</html>

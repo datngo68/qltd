@@ -1,0 +1,186 @@
+﻿@model QuanLyAnTrua.Models.ViewModels.DashboardViewModel
+
+@{
+    ViewData["Title"] = "Dashboard";
+    var selectedYear = ViewBag.SelectedYear ?? DateTime.Now.Year;
+    var selectedMonth = ViewBag.SelectedMonth;
+    var monthNames = new[] { "", "Tháng 1", "Tháng 2", "Tháng 3", "Tháng 4", "Tháng 5", "Tháng 6", "Tháng 7", "Tháng 8", "Tháng 9", "Tháng 10", "Tháng 11", "Tháng 12" };
+}
+
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-3">
+    <h2 class="mb-0"><i class="bi bi-speedometer2"></i> Dashboard</h2>
+    <div class="w-100 w-md-auto">
+        <form method="get" class="d-flex flex-column flex-md-row gap-2">
+            <input type="number" name="year" value="@selectedYear" class="form-control" style="min-width: 100px;" min="2020" max="2100" placeholder="Năm" />
+            <select name="month" class="form-select" style="min-width: 150px;">
+                <option value="">-- Tất cả tháng --</option>
+                @for (int i = 1; i <= 12; i++)
+                {
+                    <option value="@i" selected="@(selectedMonth != null && (int)selectedMonth == i)">@monthNames[i]</option>
+                }
+            </select>
+            <button type="submit" class="btn btn-primary">
+                <i class="bi bi-funnel"></i> <span class="d-none d-md-inline">Lọc</span>
+            </button>
+            @if (selectedMonth != null || (selectedYear != DateTime.Now.Year))
+            {
+                <a asp-action="Index" class="btn btn-secondary">
+                    <i class="bi bi-x-circle"></i> <span class="d-none d-md-inline">Xóa lọc</span>
+                </a>
+            }
+        </form>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-12 col-md-4 mb-3">
+        <div class="card border-0 shadow-sm h-100" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+            <div class="card-body text-white">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="flex-grow-1">
+                        <h6 class="card-subtitle mb-2 opacity-75">Tổng chi phí</h6>
+                        <h3 class="mb-0 fw-bold">@Model.TotalExpenses.ToString("N0") đ</h3>
+                    </div>
+                    <div class="d-none d-md-block">
+                        <i class="bi bi-cash-stack" style="font-size: 3rem; opacity: 0.3;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-md-4 mb-3">
+        <div class="card border-0 shadow-sm h-100" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+            <div class="card-body text-white">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="flex-grow-1">
+                        <h6 class="card-subtitle mb-2 opacity-75">Số giao dịch</h6>
+                        <h3 class="mb-0 fw-bold">@Model.TotalTransactions</h3>
+                    </div>
+                    <div class="d-none d-md-block">
+                        <i class="bi bi-receipt-cutoff" style="font-size: 3rem; opacity: 0.3;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-md-4 mb-3">
+        <div class="card border-0 shadow-sm h-100" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+            <div class="card-body text-white">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="flex-grow-1">
+                        <h6 class="card-subtitle mb-2 opacity-75">Người chi nhiều nhất</h6>
+                        @if (!string.IsNullOrEmpty(Model.TopPayerName))
+                        {
+                            <h4 class="mb-0 fw-bold">@Model.TopPayerName</h4>
+                            <small class="opacity-75">@Model.TopPayerAmount.ToString("N0") đ</small>
+                        }
+                        else
+                        {
+                            <p class="mb-0 opacity-75">Chưa có dữ liệu</p>
+                        }
+                    </div>
+                    <div class="d-none d-md-block">
+                        <i class="bi bi-person-check" style="font-size: 3rem; opacity: 0.3;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<h3 class="mb-3">Thống kê theo tuần</h3>
+<div class="table-responsive mb-4">
+    <table class="table table-striped" style="min-width: 600px;">
+        <thead class="table-light">
+            <tr>
+                <th>Tuần</th>
+                <th>Ngày bắt đầu</th>
+                <th>Ngày kết thúc</th>
+                <th>Tổng chi</th>
+                <th>Số giao dịch</th>
+                <th>Chi tiết</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var week in Model.WeeklyStatistics)
+            {
+                <tr>
+                    <td>Tuần @week.Week</td>
+                    <td>@week.StartDate.ToString("dd/MM/yyyy")</td>
+                    <td>@week.EndDate.ToString("dd/MM/yyyy")</td>
+                    <td>@week.TotalAmount.ToString("N0") đ</td>
+                    <td>@week.TransactionCount</td>
+                    <td>
+                        <button class="btn btn-sm btn-info" type="button" data-bs-toggle="collapse"
+                            data-bs-target="#week_@week.Week" aria-expanded="false">
+                            Xem chi tiết
+                        </button>
+                    </td>
+                </tr>
+                <tr>
+                    <td colspan="6">
+                        <div class="collapse" id="week_@week.Week">
+                            <div class="card card-body">
+                                <h5>Chi tiết theo người</h5>
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Người dùng</th>
+                                            <th>Số tiền phải trả</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var debt in week.UserDebts)
+                                        {
+                                            <tr>
+                                                <td>@debt.UserName</td>
+                                                <td>@debt.TotalAmount.ToString("N0") đ</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+<h3 class="mb-3">Thống kê theo tháng</h3>
+<div class="table-responsive">
+    <table class="table table-striped" style="min-width: 500px;">
+        <thead class="table-light">
+            <tr>
+                <th>Tháng</th>
+                <th>Tổng chi</th>
+                <th>Số giao dịch</th>
+                <th>Chi tiết</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var month in Model.MonthlyStatistics)
+            {
+                var monthName = new DateTime(month.Year, month.Month, 1).ToString("MM/yyyy");
+                <tr>
+                    <td>@monthName</td>
+                    <td>@month.TotalAmount.ToString("N0") đ</td>
+                    <td>@month.TransactionCount</td>
+                    <td>
+                        <a asp-controller="Payments" asp-action="Index" asp-route-year="@month.Year"
+                            asp-route-month="@month.Month" class="btn btn-sm btn-primary">
+                            <span class="d-none d-md-inline">Xem chi tiết</span>
+                            <span class="d-md-none">Xem</span>
+                        </a>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@if (!Model.MonthlyStatistics.Any())
+{
+    <p class="text-muted">Chưa có dữ liệu thống kê theo tháng.</p>
+}

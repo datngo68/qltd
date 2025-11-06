@@ -1,0 +1,46 @@
+@model QuanLyAnTrua.Models.Group
+
+@{
+    ViewData["Title"] = "Tạo nhóm mới";
+}
+
+<h2><i class="bi bi-plus-circle"></i> Tạo nhóm mới</h2>
+<hr />
+
+<div class="row">
+    <div class="col-md-6">
+        <form asp-action="Create">
+            <div asp-validation-summary="All" class="text-danger"></div>
+            
+            <div class="mb-3">
+                <label asp-for="Name" class="form-label">
+                    <i class="bi bi-tag"></i> Tên nhóm <span class="text-danger">*</span>
+                </label>
+                <input asp-for="Name" class="form-control" />
+                <span asp-validation-for="Name" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="Description" class="form-label">
+                    <i class="bi bi-file-text"></i> Mô tả
+                </label>
+                <textarea asp-for="Description" class="form-control" rows="3"></textarea>
+                <span asp-validation-for="Description" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-save"></i> Tạo nhóm
+                </button>
+                <a asp-action="Index" class="btn btn-secondary">
+                    <i class="bi bi-arrow-left"></i> Quay lại
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+}
+

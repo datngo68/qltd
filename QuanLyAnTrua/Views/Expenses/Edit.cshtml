@@ -1,0 +1,115 @@
+@model QuanLyAnTrua.Models.ViewModels.ExpenseViewModel
+
+@{
+    ViewData["Title"] = "Sửa chi phí";
+}
+
+<h2>Sửa chi phí</h2>
+<hr />
+
+<div class="row">
+    <div class="col-12 col-md-6">
+        <form asp-action="Edit" method="get" id="filterForm">
+            <input type="hidden" name="id" value="@Model.Id" />
+            @if (Context.Session.GetString("Role") == "SuperAdmin" && ViewBag.Groups != null)
+            {
+                <div class="mb-3">
+                    <label class="form-label">Lọc theo nhóm</label>
+                    <select name="groupId" class="form-select" onchange="document.getElementById('filterForm').submit();">
+                        <option value="">-- Tất cả nhóm --</option>
+                        @foreach (var group in (List<QuanLyAnTrua.Models.Group>)ViewBag.Groups)
+                        {
+                            <option value="@group.Id"
+                                selected="@(ViewBag.SelectedGroupId != null && ViewBag.SelectedGroupId == group.Id)">
+                                @group.Name
+                            </option>
+                        }
+                    </select>
+                </div>
+            }
+        </form>
+        <form asp-action="Edit" method="post">
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            <input type="hidden" asp-for="Id" />
+            @if (Context.Session.GetString("Role") == "SuperAdmin" && ViewBag.SelectedGroupId != null)
+            {
+                <input type="hidden" name="groupId" value="@ViewBag.SelectedGroupId" />
+            }
+
+            <div class="mb-3">
+                <label asp-for="Amount" class="form-label"></label>
+                <input asp-for="Amount" class="form-control" type="number" step="0.01" min="0.01" />
+                <span asp-validation-for="Amount" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="PayerId" class="form-label"></label>
+                @if (Context.Session.GetString("Role") == "User")
+                {
+                    @* User thường chỉ có thể chọn bản thân làm payer *@
+                    var currentUserId = Context.Session.GetInt32("UserId");
+                    var currentUser = Model.AllUsers?.FirstOrDefault(u => u.Id == currentUserId);
+                    <input type="hidden" asp-for="PayerId" value="@Model.PayerId" />
+                    <input type="text" class="form-control" value="@(currentUser?.Name ?? "Bạn")" readonly />
+                    <small class="text-muted">Bạn chỉ có thể chọn bản thân làm người chi tiền</small>
+                }
+                else
+                {
+                    <select asp-for="PayerId" class="form-select"
+                        asp-items="@(new SelectList(Model.AllUsers ?? new List<QuanLyAnTrua.Models.User>(), "Id", "Name"))">
+                        <option value="">-- Chọn người chi tiền --</option>
+                    </select>
+                }
+                <span asp-validation-for="PayerId" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="ExpenseDate" class="form-label"></label>
+                <input asp-for="ExpenseDate" class="form-control" type="date" />
+                <span asp-validation-for="ExpenseDate" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="Description" class="form-label"></label>
+                <textarea asp-for="Description" class="form-control" rows="3"></textarea>
+                <span asp-validation-for="Description" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Người sử dụng <span class="text-danger">*</span></label>
+                <div class="border p-3 rounded" style="max-height: 300px; overflow-y: auto; background-color: #f8f9fa;">
+                    @if (Model.AllUsers != null)
+                    {
+                        @foreach (var user in Model.AllUsers)
+                        {
+                            var isChecked = Model.ParticipantIds != null && Model.ParticipantIds.Contains(user.Id);
+                            <div class="form-check py-2">
+                                <input class="form-check-input" type="checkbox" name="ParticipantIds" value="@user.Id"
+                                    id="user_@user.Id" @(isChecked ? "checked" : "") />
+                                <label class="form-check-label" for="user_@user.Id"
+                                    style="cursor: pointer; font-size: 0.95rem;">
+                                    <i class="bi bi-person"></i> @user.Name
+                                </label>
+                            </div>
+                        }
+                    }
+                </div>
+                <span asp-validation-for="ParticipantIds" class="text-danger"></span>
+                <small class="text-muted d-block mt-2">
+                    <i class="bi bi-info-circle"></i> Bạn có thể thêm hoặc bỏ chọn người sử dụng để cập nhật danh sách
+                </small>
+            </div>
+
+            <div class="mb-3 d-flex flex-column flex-md-row gap-2">
+                <button type="submit" class="btn btn-primary w-100 w-md-auto">Lưu thay đổi</button>
+                <a asp-action="Index" class="btn btn-secondary w-100 w-md-auto">Quay lại</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    @{
+        await Html.RenderPartialAsync("_ValidationScriptsPartial");
+    }
+}

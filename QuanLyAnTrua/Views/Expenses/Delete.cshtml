@@ -1,0 +1,38 @@
+@model QuanLyAnTrua.Models.Expense
+
+@{
+    ViewData["Title"] = "Xóa chi phí";
+}
+
+<h2>Xóa chi phí</h2>
+<h3>Bạn có chắc chắn muốn xóa chi phí này?</h3>
+<div>
+    <hr />
+    <dl class="row">
+        <dt class="col-sm-2">Ngày chi</dt>
+        <dd class="col-sm-10">@Model.ExpenseDate.ToString("dd/MM/yyyy")</dd>
+
+        <dt class="col-sm-2">Số tiền</dt>
+        <dd class="col-sm-10">@Model.Amount.ToString("N0") đ</dd>
+
+        <dt class="col-sm-2">Người chi</dt>
+        <dd class="col-sm-10">@Model.Payer.Name</dd>
+
+        <dt class="col-sm-2">người sử dụng</dt>
+        <dd class="col-sm-10">
+            @string.Join(", ", Model.Participants.Select(p => p.User.Name))
+        </dd>
+
+        @if (!string.IsNullOrEmpty(Model.Description))
+        {
+            <dt class="col-sm-2">Mô tả</dt>
+            <dd class="col-sm-10">@Model.Description</dd>
+        }
+    </dl>
+
+    <form asp-action="Delete">
+        <input type="hidden" asp-for="Id" />
+        <button type="submit" class="btn btn-danger">Xóa</button>
+        <a asp-action="Index" class="btn btn-secondary">Quay lại</a>
+    </form>
+</div>
