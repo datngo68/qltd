@@ -373,6 +373,13 @@ Model.CurrentUserId.Value)))
                             <td>
                                 <form asp-action="Delete" asp-route-id="@payment.Id" method="post" class="d-inline"
                                     onsubmit="return confirm('Bạn có chắc chắn muốn xóa thanh toán này?');">
+                                    <input type="hidden" name="year" value="@Model.Year" />
+                                    <input type="hidden" name="month" value="@Model.Month" />
+                                    @if (ViewBag.SelectedGroupId != null)
+                                    {
+                                        <input type="hidden" name="groupId" value="@ViewBag.SelectedGroupId" />
+                                    }
+                                    <input type="hidden" name="returnAction" value="" />
                                     <input type="hidden" name="__RequestVerificationToken" value="@Html.AntiForgeryToken()" />
                                     <button type="submit" class="btn btn-sm btn-danger">
                                         <i class="bi bi-trash"></i> <span class="d-none d-md-inline">Xóa</span>

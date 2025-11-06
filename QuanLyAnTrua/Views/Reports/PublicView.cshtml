@@ -396,7 +396,9 @@
                                                     bankName = myDebt.Creditor.BankName, 
                                                     bankAccount = myDebt.Creditor.BankAccount, 
                                                     accountHolderName = myDebt.Creditor.AccountHolderName ?? "", 
-                                                    amount = myDebt.TotalMyDebt 
+                                                    amount = myDebt.TotalMyDebt,
+                                                    creditorId = myDebt.Creditor.CreditorId,
+                                                    userId = userInfo.UserId
                                                 });
                                                 <div class="qr-section">
                                                     <img src="@qrCodeUrlMobile" alt="QR Code" 
@@ -536,7 +538,9 @@
                                                             bankName = myDebt.Creditor.BankName, 
                                                             bankAccount = myDebt.Creditor.BankAccount, 
                                                             accountHolderName = myDebt.Creditor.AccountHolderName ?? "", 
-                                                            amount = myDebt.TotalMyDebt 
+                                                            amount = myDebt.TotalMyDebt,
+                                                            creditorId = myDebt.Creditor.CreditorId,
+                                                            userId = userInfo.UserId
                                                         });
                                                         <img src="@qrCodeUrl" alt="QR Code" 
                                                             class="img-fluid" 
@@ -987,7 +991,20 @@
             var amountNum = parseFloat(amount);
             var formattedAmount = amountNum.toLocaleString('vi-VN');
             
-            if (!confirm('Bạn có chắc chắn đã thanh toán ' + formattedAmount + ' đ cho ' + creditorName + '?')) {
+            // Yêu cầu nhập nội dung chuyển khoản để đối soát
+            var transferContent = prompt('Vui lòng nhập nội dung chuyển khoản để đối soát:\n(Ví dụ: Thanh toán cho ' + creditorName + ')', 'Thanh toán cho ' + creditorName);
+            
+            if (transferContent === null) {
+                // Người dùng hủy
+                return;
+            }
+            
+            if (!transferContent || transferContent.trim() === '') {
+                alert('Vui lòng nhập nội dung chuyển khoản!');
+                return;
+            }
+            
+            if (!confirm('Bạn có chắc chắn đã thanh toán ' + formattedAmount + ' đ cho ' + creditorName + '?\nNội dung CK: ' + transferContent)) {
                 return;
             }
 
@@ -1031,7 +1048,7 @@
                       '&userId=' + userId + 
                       '&amount=' + amount +
                       '&creditorId=' + creditorId +
-                      '&notes=' + encodeURIComponent('Thanh toán cho ' + creditorName)
+                      '&notes=' + encodeURIComponent(transferContent)
             })
             .then(response => response.json())
             .then(data => {
@@ -1063,6 +1080,82 @@
                 statusDiv.innerHTML = '<div class="alert alert-danger alert-sm py-1 mb-0"><i class="bi bi-x-circle"></i> Có lỗi xảy ra: ' + error + '</div>';
             });
         }
+
+        // Auto-reload khi có payment mới
+        (function() {
+            const token = '@ViewBag.Token';
+            if (!token) return;
+
+            let isReloading = false;
+            let lastPaymentId = null;
+
+            // Tìm max payment ID từ tất cả payments trong trang
+            function getMaxPaymentId() {
+                let maxId = null;
+                @foreach (var userDebt in Model.UserDebts)
+                {
+                    @foreach (var payment in userDebt.Payments)
+                    {
+                        <text>
+                        if (maxId === null || @payment.Id > maxId) {
+                            maxId = @payment.Id;
+                        }
+                        </text>
+                    }
+                }
+                return maxId;
+            }
+
+            // Khởi tạo lastPaymentId khi trang load
+            lastPaymentId = getMaxPaymentId();
+
+            function checkForUpdates() {
+                if (isReloading) return;
+
+                // Cập nhật lastPaymentId từ trang hiện tại trước khi check
+                const currentMaxId = getMaxPaymentId();
+                if (currentMaxId !== null) {
+                    lastPaymentId = currentMaxId;
+                }
+
+                let url = '@Url.Action("CheckUpdates", "Reports")?token=' + encodeURIComponent(token);
+                if (lastPaymentId !== null) {
+                    url += '&lastPaymentId=' + lastPaymentId;
+                }
+
+                fetch(url)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.hasUpdate) {
+                            isReloading = true;
+                            // Hiển thị thông báo trước khi reload
+                            const notification = document.createElement('div');
+                            notification.className = 'alert alert-info alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3';
+                            notification.style.zIndex = '9999';
+                            notification.style.minWidth = '300px';
+                            notification.innerHTML = `
+                                <i class="bi bi-info-circle"></i> Có thanh toán mới! Đang tải lại trang...
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            `;
+                            document.body.appendChild(notification);
+                            
+                            // Reload sau 1 giây
+                            setTimeout(() => {
+                                window.location.reload();
+                            }, 1000);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error checking for updates:', error);
+                    });
+            }
+
+            // Check mỗi 5 giây
+            setInterval(checkForUpdates, 5000);
+            
+            // Check ngay khi trang load (sau 2 giây để tránh check ngay lập tức)
+            setTimeout(checkForUpdates, 2000);
+        })();
     </script>
 </body>
 </html>

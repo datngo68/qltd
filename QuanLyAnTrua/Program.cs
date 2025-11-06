@@ -3,8 +3,31 @@ using Microsoft.Extensions.Logging;
 using QuanLyAnTrua.Data;
 using QuanLyAnTrua.Helpers;
 using QuanLyAnTrua.Models;
+using Serilog;
+using Serilog.Events;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Cấu hình Serilog - đọc từ appsettings.json
+// Log file sẽ được lưu trong thư mục logs/ của ứng dụng
+var logPath = Path.Combine(builder.Environment.ContentRootPath, "logs", "app-.log");
+Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Information()
+    .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
+    .MinimumLevel.Override("Microsoft.AspNetCore", LogEventLevel.Warning)
+    .MinimumLevel.Override("QuanLyAnTrua.Controllers.CassoWebhookController", LogEventLevel.Information)
+    .WriteTo.File(
+        path: logPath,
+        rollingInterval: RollingInterval.Day,
+        retainedFileCountLimit: 30,
+        outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
+    .CreateLogger();
+
+// Sử dụng Serilog
+builder.Host.UseSerilog();
+
+// Khởi tạo IdEncoderHelper với prefix từ configuration
+IdEncoderHelper.Initialize(builder.Configuration);
 
 // Add services to the container.
 builder.Services.AddControllersWithViews();
@@ -104,4 +127,16 @@ app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}");
 
-app.Run();
+try
+{
+    Log.Information("Starting web application");
+    app.Run();
+}
+catch (Exception ex)
+{
+    Log.Fatal(ex, "Application terminated unexpectedly");
+}
+finally
+{
+    Log.CloseAndFlush();
+}

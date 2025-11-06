@@ -120,3 +120,5 @@ logs/
 .env.local
 .env.*.local
 
+QuanLyAnTrua/appsettings.json
+QuanLyAnTrua/appsettings.json

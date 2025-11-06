@@ -209,14 +209,20 @@ namespace QuanLyAnTrua.Controllers
 
         // GET: Reports/GenerateQRCode
         [AllowAnonymous]
-        public IActionResult GenerateQRCode(string bankName, string bankAccount, string accountHolderName, decimal amount)
+        public IActionResult GenerateQRCode(string bankName, string bankAccount, string accountHolderName, decimal amount, int? creditorId = null, int? userId = null)
         {
             if (string.IsNullOrEmpty(bankAccount) || string.IsNullOrEmpty(bankName))
             {
                 return NotFound();
             }
 
-            var description = $"";
+            string? description = null;
+            // Nếu có creditorId và userId, tạo description với format: ThanToan-{encodedCreditorId}-{userId}
+            if (creditorId.HasValue && userId.HasValue)
+            {
+                description = IdEncoderHelper.CreatePaymentDescription(creditorId.Value, userId.Value);
+            }
+
             var qrBytes = QRCodeHelper.GeneratePaymentQRCode(
                 bankName,
                 bankAccount,
@@ -460,6 +466,20 @@ namespace QuanLyAnTrua.Controllers
                 groupId = user.GroupId;
             }
 
+            // Tạo notes: "Thanh toán cho {tên user}" + nội dung chuyển khoản (nếu có)
+            var paymentNotes = new List<string>();
+            paymentNotes.Add($"Thanh toán cho {creditor.Name}");
+
+            // Thêm nội dung chuyển khoản từ notes parameter (nếu có) để đối soát
+            if (!string.IsNullOrEmpty(notes))
+            {
+                // Nếu notes không chỉ là "Thanh toán cho {tên}", thêm vào
+                if (notes != $"Thanh toán cho {creditor.Name}")
+                {
+                    paymentNotes.Add($"Nội dung CK: {notes}");
+                }
+            }
+
             // Create pending payment
             var monthlyPayment = new MonthlyPayment
             {
@@ -469,7 +489,7 @@ namespace QuanLyAnTrua.Controllers
                 Month = currentMonth,
                 PaidAmount = amount,
                 PaidDate = DateTime.Today,
-                Notes = notes ?? $"Thanh toán cho {creditor.Name}",
+                Notes = string.Join(" | ", paymentNotes),
                 GroupId = groupId,
                 Status = "Pending"
             };
@@ -478,6 +498,77 @@ namespace QuanLyAnTrua.Controllers
             await _context.SaveChangesAsync();
 
             return Json(new { success = true, message = "Đã gửi yêu cầu thanh toán. Vui lòng chờ xác nhận.", paymentId = monthlyPayment.Id });
+        }
+
+        // GET: Reports/CheckUpdates
+        [AllowAnonymous]
+        [HttpGet]
+        public async Task<IActionResult> CheckUpdates(string token, int? lastPaymentId = null)
+        {
+            if (string.IsNullOrEmpty(token))
+            {
+                return Json(new { hasUpdate = false });
+            }
+
+            var sharedReport = await _context.SharedReports
+                .FirstOrDefaultAsync(sr => sr.Token == token && sr.IsActive);
+
+            if (sharedReport == null)
+            {
+                return Json(new { hasUpdate = false });
+            }
+
+            // Check expire date
+            if (sharedReport.ExpiresAt.HasValue && sharedReport.ExpiresAt.Value < DateTime.Now)
+            {
+                return Json(new { hasUpdate = false });
+            }
+
+            // Xác định user nào cần check
+            List<int> userIdsToCheck = new List<int>();
+
+            if (sharedReport.ReportType == "User" && sharedReport.UserId.HasValue)
+            {
+                userIdsToCheck.Add(sharedReport.UserId.Value);
+            }
+            else if (sharedReport.ReportType == "Group" && sharedReport.GroupId.HasValue)
+            {
+                // Lấy tất cả users trong group
+                var usersInGroup = await _context.Users
+                    .Where(u => u.GroupId == sharedReport.GroupId.Value && u.IsActive)
+                    .Select(u => u.Id)
+                    .ToListAsync();
+                userIdsToCheck.AddRange(usersInGroup);
+            }
+
+            if (!userIdsToCheck.Any())
+            {
+                return Json(new { hasUpdate = false });
+            }
+
+            // Kiểm tra xem có payment mới nào cho users trong link chia sẻ không
+            // Chỉ check payment có status "Confirmed" (đã xác nhận)
+            // Nếu có lastPaymentId, chỉ check payment có Id lớn hơn
+            // Nếu không có, check payment trong 5 phút gần đây
+            bool hasNewPayment;
+            if (lastPaymentId.HasValue)
+            {
+                hasNewPayment = await _context.MonthlyPayments
+                    .AnyAsync(mp => userIdsToCheck.Contains(mp.UserId) &&
+                                   mp.Id > lastPaymentId.Value &&
+                                   mp.Status == "Confirmed");
+            }
+            else
+            {
+                // Check payment trong 5 phút gần đây và có status "Confirmed"
+                var checkTime = DateTime.Now.AddMinutes(-5);
+                hasNewPayment = await _context.MonthlyPayments
+                    .AnyAsync(mp => userIdsToCheck.Contains(mp.UserId) &&
+                                   mp.PaidDate >= checkTime &&
+                                   mp.Status == "Confirmed");
+            }
+
+            return Json(new { hasUpdate = hasNewPayment });
         }
 
         // POST: Reports/ConfirmPayment

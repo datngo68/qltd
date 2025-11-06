@@ -358,7 +358,7 @@ namespace QuanLyAnTrua.Controllers
         // POST: Payments/Delete/5
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Delete(int id, int? year = null, int? month = null, int? groupId = null)
+        public async Task<IActionResult> Delete(int id, int? year = null, int? month = null, int? groupId = null, string? returnAction = null)
         {
             var monthlyPayment = await _context.MonthlyPayments.FindAsync(id);
             if (monthlyPayment == null)
@@ -366,7 +366,12 @@ namespace QuanLyAnTrua.Controllers
                 TempData["ErrorMessage"] = "Không tìm thấy thanh toán";
                 var redirectYear = year ?? DateTime.Now.Year;
                 var redirectMonth = month ?? DateTime.Now.Month;
-                return RedirectToAction("PendingPayments", "Reports", new { year = redirectYear, month = redirectMonth, groupId = groupId });
+                // Nếu có returnAction, redirect về đó, nếu không thì về Index
+                if (!string.IsNullOrEmpty(returnAction) && returnAction == "PendingPayments")
+                {
+                    return RedirectToAction("PendingPayments", "Reports", new { year = redirectYear, month = redirectMonth, groupId = groupId });
+                }
+                return RedirectToAction(nameof(Index), new { year = redirectYear, month = redirectMonth, groupId = groupId });
             }
 
             var currentUserId = SessionHelper.GetUserId(HttpContext);
@@ -390,7 +395,12 @@ namespace QuanLyAnTrua.Controllers
                     TempData["ErrorMessage"] = "Bạn không có quyền truy cập thanh toán này.";
                     var redirectYear = year ?? monthlyPayment.Year;
                     var redirectMonth = month ?? monthlyPayment.Month;
-                    return RedirectToAction("PendingPayments", "Reports", new { year = redirectYear, month = redirectMonth, groupId = groupId });
+                    // Nếu có returnAction, redirect về đó, nếu không thì về Index
+                    if (!string.IsNullOrEmpty(returnAction) && returnAction == "PendingPayments")
+                    {
+                        return RedirectToAction("PendingPayments", "Reports", new { year = redirectYear, month = redirectMonth, groupId = groupId });
+                    }
+                    return RedirectToAction(nameof(Index), new { year = redirectYear, month = redirectMonth, groupId = groupId });
                 }
             }
             else if (SessionHelper.IsUser(HttpContext))
@@ -411,7 +421,12 @@ namespace QuanLyAnTrua.Controllers
                     TempData["ErrorMessage"] = "Bạn chỉ có thể từ chối thanh toán từ những người nợ bạn";
                     var redirectYear = year ?? monthlyPayment.Year;
                     var redirectMonth = month ?? monthlyPayment.Month;
-                    return RedirectToAction("PendingPayments", "Reports", new { year = redirectYear, month = redirectMonth, groupId = groupId });
+                    // Nếu có returnAction, redirect về đó, nếu không thì về Index
+                    if (!string.IsNullOrEmpty(returnAction) && returnAction == "PendingPayments")
+                    {
+                        return RedirectToAction("PendingPayments", "Reports", new { year = redirectYear, month = redirectMonth, groupId = groupId });
+                    }
+                    return RedirectToAction(nameof(Index), new { year = redirectYear, month = redirectMonth, groupId = groupId });
                 }
             }
             else
@@ -419,15 +434,26 @@ namespace QuanLyAnTrua.Controllers
                 TempData["ErrorMessage"] = "Bạn không có quyền xóa thanh toán.";
                 var redirectYear = year ?? DateTime.Now.Year;
                 var redirectMonth = month ?? DateTime.Now.Month;
-                return RedirectToAction("PendingPayments", "Reports", new { year = redirectYear, month = redirectMonth, groupId = groupId });
+                // Nếu có returnAction, redirect về đó, nếu không thì về Index
+                if (!string.IsNullOrEmpty(returnAction) && returnAction == "PendingPayments")
+                {
+                    return RedirectToAction("PendingPayments", "Reports", new { year = redirectYear, month = redirectMonth, groupId = groupId });
+                }
+                return RedirectToAction(nameof(Index), new { year = redirectYear, month = redirectMonth, groupId = groupId });
             }
 
             var finalYear = year ?? monthlyPayment.Year;
             var finalMonth = month ?? monthlyPayment.Month;
             _context.MonthlyPayments.Remove(monthlyPayment);
             await _context.SaveChangesAsync();
-            TempData["SuccessMessage"] = "Đã từ chối thanh toán thành công!";
-            return RedirectToAction("PendingPayments", "Reports", new { year = finalYear, month = finalMonth, groupId = groupId });
+            TempData["SuccessMessage"] = "Đã xóa thanh toán thành công!";
+
+            // Nếu có returnAction, redirect về đó, nếu không thì về Index
+            if (!string.IsNullOrEmpty(returnAction) && returnAction == "PendingPayments")
+            {
+                return RedirectToAction("PendingPayments", "Reports", new { year = finalYear, month = finalMonth, groupId = groupId });
+            }
+            return RedirectToAction(nameof(Index), new { year = finalYear, month = finalMonth, groupId = groupId });
         }
 
         private bool MonthlyPaymentExists(int id)
