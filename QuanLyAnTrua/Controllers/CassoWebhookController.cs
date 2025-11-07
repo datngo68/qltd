@@ -30,8 +30,21 @@ namespace QuanLyAnTrua.Controllers
         // GET: Test parse description (for debugging)
         [Microsoft.AspNetCore.Authorization.AllowAnonymous]
         [HttpGet("test-parse")]
-        public IActionResult TestParseDescription(string description)
+        public IActionResult TestParseDescription(string description, string? api_key = null)
         {
+            // Kiểm tra API key
+            var expectedApiKey = _configuration["ApiKeys:TestParse"];
+            if (string.IsNullOrEmpty(expectedApiKey))
+            {
+                _logger.LogWarning("TestParse API key is not configured");
+                return StatusCode(500, new { error = "API key is not configured" });
+            }
+
+            if (string.IsNullOrEmpty(api_key) || !string.Equals(api_key, expectedApiKey, StringComparison.Ordinal))
+            {
+                return Unauthorized(new { error = "Invalid or missing API key" });
+            }
+
             if (string.IsNullOrEmpty(description))
             {
                 return BadRequest(new { error = "Description is required" });
