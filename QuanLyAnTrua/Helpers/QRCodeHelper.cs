@@ -233,7 +233,8 @@ namespace QuanLyAnTrua.Helpers
             string prefix_53 = "5303704";
 
             // Tag 54: Amount
-            int amountInt = (int)decimal.Truncate(amount);
+            // Làm tròn lên (round up) để đảm bảo số tiền trong QR code khớp với số tiền khi thanh toán
+            int amountInt = (int)Math.Ceiling(amount);
             string prefix_54 = $"54{ReturnNumber(amountInt.ToString().Length)}{amountInt}";
 
             // Tag 58: Country code

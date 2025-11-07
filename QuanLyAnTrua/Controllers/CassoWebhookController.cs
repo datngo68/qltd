@@ -51,6 +51,8 @@ namespace QuanLyAnTrua.Controllers
                     description = description,
                     creditorId = paymentInfo.Value.creditorId,
                     userId = paymentInfo.Value.userId,
+                    year = paymentInfo.Value.year,
+                    month = paymentInfo.Value.month,
                     userExists = user != null,
                     userName = user?.Name,
                     creditorExists = creditor != null,
@@ -152,8 +154,8 @@ namespace QuanLyAnTrua.Controllers
                     var testParse = IdEncoderHelper.ParsePaymentDescription(request.Data.Description);
                     if (testParse.HasValue)
                     {
-                        _logger.LogInformation("Description parsed successfully: CreditorId={CreditorId}, UserId={UserId}",
-                            testParse.Value.creditorId, testParse.Value.userId);
+                        _logger.LogInformation("Description parsed successfully: CreditorId={CreditorId}, UserId={UserId}, Year={Year}, Month={Month}",
+                            testParse.Value.creditorId, testParse.Value.userId, testParse.Value.year, testParse.Value.month);
                     }
                     else
                     {
@@ -354,8 +356,8 @@ namespace QuanLyAnTrua.Controllers
 
                 if (paymentInfo.HasValue)
                 {
-                    _logger.LogInformation("Parsed payment description: CreditorId={CreditorId}, UserId={UserId}",
-                        paymentInfo.Value.creditorId, paymentInfo.Value.userId);
+                    _logger.LogInformation("Parsed payment description: CreditorId={CreditorId}, UserId={UserId}, Year={Year}, Month={Month}",
+                        paymentInfo.Value.creditorId, paymentInfo.Value.userId, paymentInfo.Value.year, paymentInfo.Value.month);
                 }
                 else
                 {
@@ -371,8 +373,8 @@ namespace QuanLyAnTrua.Controllers
                     // paymentInfo.Value.userId = Người thanh toán (người gửi tiền)
                     // paymentInfo.Value.creditorId = Người được thanh toán (người nhận tiền)
 
-                    _logger.LogInformation("DEBUG: Parsed values - paymentInfo.Value.creditorId={CreditorId}, paymentInfo.Value.userId={UserId}",
-                        paymentInfo.Value.creditorId, paymentInfo.Value.userId);
+                    _logger.LogInformation("DEBUG: Parsed values - paymentInfo.Value.creditorId={CreditorId}, paymentInfo.Value.userId={UserId}, paymentInfo.Value.year={Year}, paymentInfo.Value.month={Month}",
+                        paymentInfo.Value.creditorId, paymentInfo.Value.userId, paymentInfo.Value.year, paymentInfo.Value.month);
 
                     // Set creditorId ngay từ đầu để đảm bảo nó luôn được set
                     creditorId = paymentInfo.Value.creditorId;
@@ -428,8 +430,14 @@ namespace QuanLyAnTrua.Controllers
                     }
                 }
 
-                // Parse transactionDateTime để lấy Year/Month
+                // Xác định Year/Month cho payment
+                // Ưu tiên: Nếu có paymentInfo (parse từ description), dùng Year/Month từ description
+                // Nếu không, dùng Year/Month từ transactionDate (ngày giao dịch từ ngân hàng)
+                int year;
+                int month;
                 DateTime transactionDate;
+
+                // Parse transactionDateTime để lấy ngày thanh toán (PaidDate)
                 if (!string.IsNullOrEmpty(transaction.TransactionDateTime))
                 {
                     if (DateTime.TryParse(transaction.TransactionDateTime, out var parsedDate))
@@ -460,15 +468,32 @@ namespace QuanLyAnTrua.Controllers
                     transactionDate = DateTime.Now;
                 }
 
-                var year = transactionDate.Year;
-                var month = transactionDate.Month;
+                if (paymentInfo.HasValue)
+                {
+                    // Có paymentInfo: dùng Year/Month từ description (tháng/năm cần thanh toán)
+                    year = paymentInfo.Value.year;
+                    month = paymentInfo.Value.month;
+                    _logger.LogInformation("Using Year/Month from description: Year={Year}, Month={Month}, PaidDate={PaidDate}",
+                        year, month, transactionDate);
+                }
+                else
+                {
+                    // Không có paymentInfo: dùng Year/Month từ transactionDate (ngày giao dịch)
+                    year = transactionDate.Year;
+                    month = transactionDate.Month;
+                    _logger.LogInformation("Using Year/Month from transactionDate: Year={Year}, Month={Month}, PaidDate={PaidDate}",
+                        year, month, transactionDate);
+                }
 
-                // Kiểm tra trùng lặp
+                // Làm tròn số tiền lên (round up) để khớp với số tiền trong QR code
+                var roundedAmount = Math.Ceiling(transaction.Amount);
+
+                // Kiểm tra trùng lặp (so sánh với số tiền đã làm tròn)
                 var isDuplicate = await _context.MonthlyPayments
                     .AnyAsync(mp => mp.UserId == user.Id &&
                                    mp.Year == year &&
                                    mp.Month == month &&
-                                   mp.PaidAmount == transaction.Amount &&
+                                   mp.PaidAmount == roundedAmount &&
                                    mp.PaidDate.Date == transactionDate.Date &&
                                    (!string.IsNullOrEmpty(transaction.Reference) ? mp.Notes != null && mp.Notes.Contains(transaction.Reference) : true) &&
                                    (creditorId.HasValue ? mp.CreditorId == creditorId.Value : true));
@@ -505,7 +530,7 @@ namespace QuanLyAnTrua.Controllers
                     CreditorId = creditorId, // Người được thanh toán (có thể null nếu không parse được description)
                     Year = year,
                     Month = month,
-                    PaidAmount = transaction.Amount,
+                    PaidAmount = roundedAmount, // Sử dụng số tiền đã làm tròn lên
                     PaidDate = transactionDate,
                     Notes = notes,
                     GroupId = user.GroupId,

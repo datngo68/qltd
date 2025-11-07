@@ -74,15 +74,58 @@ namespace QuanLyAnTrua.Helpers
         }
 
         /// <summary>
-        /// Tạo description cho thanh toán với format: {Prefix}-{encodedCreditorId}-{userId}[-{Suffix}]
-        /// Nếu có suffix, sẽ thêm vào cuối để dễ dàng parse chính xác
+        /// Mã hóa chuỗi thành Base64Url (URL-safe)
         /// </summary>
-        public static string CreatePaymentDescription(int creditorId, int userId)
+        private static string EncodeBase64Url(string input)
+        {
+            var bytes = Encoding.UTF8.GetBytes(input);
+            var base64 = Convert.ToBase64String(bytes);
+            // Chuyển thành Base64Url (URL-safe)
+            return base64.TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        }
+
+        /// <summary>
+        /// Giải mã Base64Url về chuỗi gốc
+        /// </summary>
+        private static string? DecodeBase64Url(string encoded)
+        {
+            try
+            {
+                // Chuyển từ Base64Url về Base64
+                var base64 = encoded.Replace('-', '+').Replace('_', '/');
+                // Thêm padding nếu cần
+                switch (base64.Length % 4)
+                {
+                    case 2: base64 += "=="; break;
+                    case 3: base64 += "="; break;
+                }
+                var bytes = Convert.FromBase64String(base64);
+                return Encoding.UTF8.GetString(bytes);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Tạo description cho thanh toán với format: {Prefix}-{Base64UrlEncodedData}[-{Suffix}]
+        /// Trong đó Base64UrlEncodedData chứa: {encodedCreditorId}-{userId}-{year}-{month}
+        /// Suffix được giữ ở ngoài (không mã hóa) để dễ nhận biết phần cuối
+        /// Toàn bộ dữ liệu được mã hóa để tránh lộ liễu
+        /// </summary>
+        public static string CreatePaymentDescription(int creditorId, int userId, int year, int month)
         {
             var encodedCreditorId = EncodeCreditorId(creditorId);
-            var description = $"{_prefix}-{encodedCreditorId}-{userId}";
+            // Chỉ mã hóa phần data, không mã hóa suffix
+            var data = $"{encodedCreditorId}-{userId}-{year}-{month}";
 
-            // Nếu có suffix, thêm vào cuối để đánh dấu kết thúc
+            // Mã hóa data bằng Base64Url
+            var encodedData = EncodeBase64Url(data);
+
+            // Format: {Prefix}-{Base64UrlEncodedData}[-{Suffix}]
+            // Suffix được giữ ở ngoài để dễ nhận biết phần cuối
+            var description = $"{_prefix}-{encodedData}";
             if (!string.IsNullOrWhiteSpace(_suffix))
             {
                 description += $"-{_suffix}";
@@ -92,13 +135,13 @@ namespace QuanLyAnTrua.Helpers
         }
 
         /// <summary>
-        /// Parse description để lấy creditorId và userId
-        /// Trả về (creditorId, userId) nếu thành công, null nếu không đúng format
-        /// Tìm chuỗi prefix trong description và parse từ đó, bỏ qua mọi ký tự trước và sau format
+        /// Parse description để lấy creditorId, userId, year và month
+        /// Trả về (creditorId, userId, year, month) nếu thành công, null nếu không đúng format
+        /// Format mới: {Prefix}-{Base64UrlEncodedData}
+        /// Trong đó Base64UrlEncodedData chứa: {encodedCreditorId}-{userId}-{year}-{month}[-{Suffix}]
         /// Xử lý trường hợp ngân hàng thêm tiền tố/hậu tố vào description
-        /// Nếu có suffix, sẽ tìm suffix để xác định chính xác phần cần parse
         /// </summary>
-        public static (int creditorId, int userId)? ParsePaymentDescription(string? description)
+        public static (int creditorId, int userId, int year, int month)? ParsePaymentDescription(string? description)
         {
             if (string.IsNullOrWhiteSpace(description))
                 return null;
@@ -115,6 +158,7 @@ namespace QuanLyAnTrua.Helpers
             var normalizedDescription = description.Substring(prefixIndex).Trim();
 
             // Nếu có suffix, tìm vị trí của suffix để xác định phần cần parse
+            // Format: prefix-Base64UrlEncodedData[-suffix]
             if (!string.IsNullOrWhiteSpace(_suffix))
             {
                 var suffixUpper = _suffix.ToUpperInvariant();
@@ -122,49 +166,56 @@ namespace QuanLyAnTrua.Helpers
 
                 if (suffixIndexInNormalized > 0)
                 {
-                    // Tìm vị trí của suffix trong phần normalized
                     // Lấy phần từ prefix đến suffix (không bao gồm suffix)
                     normalizedDescription = normalizedDescription.Substring(0, suffixIndexInNormalized).Trim();
                 }
             }
 
-            // Split theo '-' để lấy các phần
-            // Format: prefix-encodedCreditorId-userId[-suffix]
+            // Split theo '-' để lấy prefix và encoded data
+            // Format: prefix-Base64UrlEncodedData[-suffix]
             var parts = normalizedDescription.Split(new[] { '-' }, StringSplitOptions.RemoveEmptyEntries);
 
-            if (parts.Length < 3)
+            // Cần ít nhất 2 parts: prefix và encoded data
+            if (parts.Length < 2)
                 return null;
 
-            // Trim whitespace từ mỗi part để xử lý trường hợp có space
             var prefixPart = parts[0].Trim();
-            var encodedCreditorIdPart = parts[1].Trim();
-            var userIdPart = parts[2].Trim();
 
             // parts[0] phải là prefix (so sánh không phân biệt hoa thường)
             if (!string.Equals(prefixPart, _prefix, StringComparison.OrdinalIgnoreCase))
                 return null;
 
-            // parts[1] là encodedCreditorId - decode nó
+            // parts[1] là Base64Url encoded data - decode nó
+            // Có thể có thêm parts sau đó (ngân hàng thêm hậu tố), chỉ lấy parts[1]
+            var encodedData = parts[1].Trim();
+
+            // Decode Base64Url để lấy data gốc
+            var decodedData = DecodeBase64Url(encodedData);
+            if (string.IsNullOrWhiteSpace(decodedData))
+                return null;
+
+            // Parse decoded data: {encodedCreditorId}-{userId}-{year}-{month}
+            // Lưu ý: Suffix không được mã hóa trong Base64Url, nên không có trong decodedData
+            var dataParts = decodedData.Split(new[] { '-' }, StringSplitOptions.RemoveEmptyEntries);
+
+            // Cần đúng 4 parts: encodedCreditorId, userId, year, month
+            if (dataParts.Length < 4)
+                return null;
+
+            var encodedCreditorIdPart = dataParts[0].Trim();
+            var userIdPart = dataParts[1].Trim();
+            var yearPart = dataParts[2].Trim();
+            var monthPart = dataParts[3].Trim();
+
+            // Decode creditorId
             var creditorId = DecodeCreditorId(encodedCreditorIdPart);
             if (!creditorId.HasValue)
                 return null;
 
-            // parts[2] là userId
-            // Nếu có suffix và parts[2] chứa suffix, chỉ lấy phần trước suffix
+            // Parse userId
             var userIdStr = userIdPart;
 
-            // Nếu có suffix trong parts[2], loại bỏ nó
-            if (!string.IsNullOrWhiteSpace(_suffix))
-            {
-                var suffixIndexInUserId = userIdStr.IndexOf(_suffix, StringComparison.OrdinalIgnoreCase);
-                if (suffixIndexInUserId > 0)
-                {
-                    userIdStr = userIdStr.Substring(0, suffixIndexInUserId).Trim();
-                }
-            }
-
             // Parse userId (chỉ lấy số ở đầu, bỏ qua mọi text sau đó)
-            // Ví dụ: "5 - QR" -> lấy "5"
             var userIdMatch = Regex.Match(userIdStr, @"^\d+");
             if (!userIdMatch.Success)
                 return null;
@@ -172,7 +223,35 @@ namespace QuanLyAnTrua.Helpers
             if (!int.TryParse(userIdMatch.Value, out int userId))
                 return null;
 
-            return (creditorId.Value, userId);
+            // Parse year
+            var yearStr = yearPart;
+
+            var yearMatch = Regex.Match(yearStr, @"^\d+");
+            if (!yearMatch.Success)
+                return null;
+
+            if (!int.TryParse(yearMatch.Value, out int year))
+                return null;
+
+            // Validate year (2000-2100)
+            if (year < 2000 || year > 2100)
+                return null;
+
+            // Parse month
+            var monthStr = monthPart;
+
+            var monthMatch = Regex.Match(monthStr, @"^\d+");
+            if (!monthMatch.Success)
+                return null;
+
+            if (!int.TryParse(monthMatch.Value, out int month))
+                return null;
+
+            // Validate month (1-12)
+            if (month < 1 || month > 12)
+                return null;
+
+            return (creditorId.Value, userId, year, month);
         }
     }
 }

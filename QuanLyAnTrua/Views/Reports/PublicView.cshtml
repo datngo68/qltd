@@ -1,4 +1,5 @@
 @model QuanLyAnTrua.Models.ViewModels.MonthlyReportViewModel
+@using QuanLyAnTrua.Helpers
 
 @{
     ViewData["Title"] = "Báo cáo thanh toán";
@@ -392,13 +393,16 @@
                                             
                                             @if (!string.IsNullOrEmpty(myDebt.Creditor.BankName) && !string.IsNullOrEmpty(myDebt.Creditor.BankAccount))
                                             {
+                                                var roundedAmountMobile = Math.Ceiling(myDebt.TotalMyDebt);
                                                 var qrCodeUrlMobile = Url.Action("GenerateQRCode", "Reports", new { 
                                                     bankName = myDebt.Creditor.BankName, 
                                                     bankAccount = myDebt.Creditor.BankAccount, 
                                                     accountHolderName = myDebt.Creditor.AccountHolderName ?? "", 
-                                                    amount = myDebt.TotalMyDebt,
+                                                    amount = roundedAmountMobile,
                                                     creditorId = myDebt.Creditor.CreditorId,
-                                                    userId = userInfo.UserId
+                                                    userId = userInfo.UserId,
+                                                    year = Model.Year,
+                                                    month = Model.Month
                                                 });
                                                 <div class="qr-section">
                                                     <img src="@qrCodeUrlMobile" alt="QR Code" 
@@ -414,6 +418,15 @@
                                             }
                                             
                                             <div class="mt-3">
+                                                @{
+                                                    var transferContentMobile = IdEncoderHelper.CreatePaymentDescription(
+                                                        myDebt.Creditor.CreditorId, 
+                                                        userInfo.UserId, 
+                                                        Model.Year, 
+                                                        Model.Month
+                                                    );
+                                                    var roundedAmountMobileForCopy = Math.Ceiling(myDebt.TotalMyDebt);
+                                                }
                                                 <strong><i class="bi bi-bank"></i> Thông tin ngân hàng:</strong><br />
                                                 @if (!string.IsNullOrEmpty(myDebt.Creditor.BankName))
                                                 {
@@ -421,12 +434,29 @@
                                                 }
                                                 @if (!string.IsNullOrEmpty(myDebt.Creditor.BankAccount))
                                                 {
-                                                    <small>Số TK: <strong class="text-primary">@myDebt.Creditor.BankAccount</strong></small><br />
+                                                    <small>
+                                                        Số TK: <strong class="text-primary">@myDebt.Creditor.BankAccount</strong>
+                                                        <button type="button" class="btn btn-sm btn-link p-0 ms-1" data-copy="@myDebt.Creditor.BankAccount" title="Copy số tài khoản">
+                                                            <i class="bi bi-clipboard" style="font-size: 0.85rem;"></i>
+                                                        </button>
+                                                    </small><br />
                                                 }
                                                 @if (!string.IsNullOrEmpty(myDebt.Creditor.AccountHolderName))
                                                 {
-                                                    <small>Chủ TK: @myDebt.Creditor.AccountHolderName</small>
+                                                    <small>Chủ TK: @myDebt.Creditor.AccountHolderName</small><br />
                                                 }
+                                                <small>
+                                                    Số tiền: <strong>@roundedAmountMobileForCopy.ToString("N0") đ</strong>
+                                                    <button type="button" class="btn btn-sm btn-link p-0 ms-1" data-copy="@((int)roundedAmountMobileForCopy)" title="Copy số tiền">
+                                                        <i class="bi bi-clipboard" style="font-size: 0.85rem;"></i>
+                                                    </button>
+                                                </small><br />
+                                                <small>
+                                                    Nội dung CK: <strong>@transferContentMobile</strong>
+                                                    <button type="button" class="btn btn-sm btn-link p-0 ms-1" data-copy="@transferContentMobile" title="Copy nội dung chuyển khoản">
+                                                        <i class="bi bi-clipboard" style="font-size: 0.85rem;"></i>
+                                                    </button>
+                                                </small>
                                             </div>
 
                                             <details class="mt-3">
@@ -480,6 +510,18 @@
                                                         <span class="text-danger fw-bold fs-5">@myDebt.TotalMyDebt.ToString("N0") đ</span>
                                                     </p>
                                                     
+                                                    @{
+                                                        var transferContentDesktop = !string.IsNullOrEmpty(myDebt.Creditor.BankName) && !string.IsNullOrEmpty(myDebt.Creditor.BankAccount)
+                                                            ? IdEncoderHelper.CreatePaymentDescription(
+                                                                myDebt.Creditor.CreditorId, 
+                                                                userInfo.UserId, 
+                                                                Model.Year, 
+                                                                Model.Month
+                                                            )
+                                                            : "";
+                                                        var roundedAmountDesktopForCopy = Math.Ceiling(myDebt.TotalMyDebt);
+                                                    }
+                                                    
                                                     @if (!string.IsNullOrEmpty(myDebt.Creditor.BankName) || !string.IsNullOrEmpty(myDebt.Creditor.BankAccount))
                                                     {
                                                         <p class="mb-2">
@@ -490,12 +532,29 @@
                                                             }
                                                             @if (!string.IsNullOrEmpty(myDebt.Creditor.BankAccount))
                                                             {
-                                                                <span>Số tài khoản: <strong>@myDebt.Creditor.BankAccount</strong></span><br />
+                                                                <span>
+                                                                    Số tài khoản: <strong>@myDebt.Creditor.BankAccount</strong>
+                                                                    <button type="button" class="btn btn-sm btn-link p-0 ms-1" data-copy="@myDebt.Creditor.BankAccount" title="Copy số tài khoản">
+                                                                        <i class="bi bi-clipboard"></i>
+                                                                    </button>
+                                                                </span><br />
                                                             }
                                                             @if (!string.IsNullOrEmpty(myDebt.Creditor.AccountHolderName))
                                                             {
-                                                                <span>Chủ tài khoản: @myDebt.Creditor.AccountHolderName</span>
+                                                                <span>Chủ tài khoản: @myDebt.Creditor.AccountHolderName</span><br />
                                                             }
+                                                            <span>
+                                                                Số tiền: <strong>@roundedAmountDesktopForCopy.ToString("N0") đ</strong>
+                                                                <button type="button" class="btn btn-sm btn-link p-0 ms-1" data-copy="@((int)roundedAmountDesktopForCopy)" title="Copy số tiền">
+                                                                    <i class="bi bi-clipboard"></i>
+                                                                </button>
+                                                            </span><br />
+                                                            <span>
+                                                                Nội dung CK: <strong>@transferContentDesktop</strong>
+                                                                <button type="button" class="btn btn-sm btn-link p-0 ms-1" data-copy="@transferContentDesktop" title="Copy nội dung chuyển khoản">
+                                                                    <i class="bi bi-clipboard"></i>
+                                                                </button>
+                                                            </span>
                                                         </p>
                                                     }
 
@@ -538,9 +597,11 @@
                                                             bankName = myDebt.Creditor.BankName, 
                                                             bankAccount = myDebt.Creditor.BankAccount, 
                                                             accountHolderName = myDebt.Creditor.AccountHolderName ?? "", 
-                                                            amount = myDebt.TotalMyDebt,
+                                                            amount = roundedAmountDesktopForCopy,
                                                             creditorId = myDebt.Creditor.CreditorId,
-                                                            userId = userInfo.UserId
+                                                            userId = userInfo.UserId,
+                                                            year = Model.Year,
+                                                            month = Model.Month
                                                         });
                                                         <img src="@qrCodeUrl" alt="QR Code" 
                                                             class="img-fluid" 
@@ -986,6 +1047,60 @@
             var modal = new bootstrap.Modal(document.getElementById('qrCodeModal'));
             modal.show();
         }
+
+        // Copy to clipboard - đơn giản với data attribute
+        document.addEventListener('click', function(e) {
+            var btn = e.target.closest('[data-copy]');
+            if (!btn) return;
+            
+            var textToCopy = btn.getAttribute('data-copy');
+            var icon = btn.querySelector('i');
+            var originalClass = icon ? icon.className : '';
+
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(textToCopy).then(function() {
+                    if (icon) {
+                        icon.className = 'bi bi-check';
+                        setTimeout(function() {
+                            icon.className = originalClass;
+                        }, 1000);
+                    }
+                }).catch(function(err) {
+                    console.error('Failed to copy:', err);
+                    // Fallback
+                    var textArea = document.createElement('textarea');
+                    textArea.value = textToCopy;
+                    textArea.style.position = 'fixed';
+                    textArea.style.top = '-9999px';
+                    document.body.appendChild(textArea);
+                    textArea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textArea);
+                    if (icon) {
+                        icon.className = 'bi bi-check';
+                        setTimeout(function() {
+                            icon.className = originalClass;
+                        }, 1000);
+                    }
+                });
+            } else {
+                // Fallback cho trình duyệt cũ
+                var textArea = document.createElement('textarea');
+                textArea.value = textToCopy;
+                textArea.style.position = 'fixed';
+                textArea.style.top = '-9999px';
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                if (icon) {
+                    icon.className = 'bi bi-check';
+                    setTimeout(function() {
+                        icon.className = originalClass;
+                    }, 1000);
+                }
+            }
+        });
 
         function markAsPaid(token, userId, amount, creditorName, creditorId) {
             var amountNum = parseFloat(amount);

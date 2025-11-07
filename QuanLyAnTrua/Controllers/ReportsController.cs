@@ -209,25 +209,46 @@ namespace QuanLyAnTrua.Controllers
 
         // GET: Reports/GenerateQRCode
         [AllowAnonymous]
-        public IActionResult GenerateQRCode(string bankName, string bankAccount, string accountHolderName, decimal amount, int? creditorId = null, int? userId = null)
+        public IActionResult GenerateQRCode(string bankName, string bankAccount, string accountHolderName, decimal amount, int? creditorId = null, int? userId = null, int? year = null, int? month = null)
         {
             if (string.IsNullOrEmpty(bankAccount) || string.IsNullOrEmpty(bankName))
             {
                 return NotFound();
             }
 
+            // Làm tròn số tiền lên (round up) để đảm bảo số tiền trong QR code khớp với số tiền khi thanh toán
+            var roundedAmount = Math.Ceiling(amount);
+
             string? description = null;
-            // Nếu có creditorId và userId, tạo description với format: ThanToan-{encodedCreditorId}-{userId}
+            // Nếu có creditorId và userId, tạo description với format: {Prefix}-{encodedCreditorId}-{userId}-{year}-{month}[-{Suffix}]
+            // Year và Month là bắt buộc khi có creditorId và userId
             if (creditorId.HasValue && userId.HasValue)
             {
-                description = IdEncoderHelper.CreatePaymentDescription(creditorId.Value, userId.Value);
+                // Year và Month là bắt buộc khi generate QR code cho thanh toán
+                if (!year.HasValue || !month.HasValue)
+                {
+                    return BadRequest(new { error = "Year and Month are required when generating QR code for payment" });
+                }
+
+                // Validate year và month
+                if (year.Value < 2000 || year.Value > 2100)
+                {
+                    return BadRequest(new { error = "Year must be between 2000 and 2100" });
+                }
+
+                if (month.Value < 1 || month.Value > 12)
+                {
+                    return BadRequest(new { error = "Month must be between 1 and 12" });
+                }
+
+                description = IdEncoderHelper.CreatePaymentDescription(creditorId.Value, userId.Value, year.Value, month.Value);
             }
 
             var qrBytes = QRCodeHelper.GeneratePaymentQRCode(
                 bankName,
                 bankAccount,
                 accountHolderName ?? "",
-                amount,
+                roundedAmount,
                 description
             );
 
@@ -459,6 +480,9 @@ namespace QuanLyAnTrua.Controllers
             var currentYear = DateTime.Now.Year;
             var currentMonth = DateTime.Now.Month;
 
+            // Làm tròn số tiền lên (round up) để khớp với số tiền trong QR code
+            var roundedAmount = Math.Ceiling(amount);
+
             // Set GroupId
             int? groupId = null;
             if (user.GroupId.HasValue)
@@ -487,7 +511,7 @@ namespace QuanLyAnTrua.Controllers
                 CreditorId = creditorId,
                 Year = currentYear,
                 Month = currentMonth,
-                PaidAmount = amount,
+                PaidAmount = roundedAmount, // Sử dụng số tiền đã làm tròn lên
                 PaidDate = DateTime.Today,
                 Notes = string.Join(" | ", paymentNotes),
                 GroupId = groupId,

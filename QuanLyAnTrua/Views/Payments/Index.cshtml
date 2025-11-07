@@ -1,4 +1,5 @@
 @model QuanLyAnTrua.Models.ViewModels.MonthlyReportViewModel
+@using QuanLyAnTrua.Helpers
 
 @{
     ViewData["Title"] = "Quản lý thanh toán";
@@ -122,6 +123,19 @@ Model.CurrentUserId.Value)))
                                         <span class="text-danger fw-bold fs-5">@myDebt.TotalMyDebt.ToString("N0") đ</span>
                                     </p>
 
+                                    @{
+                                        var transferContent = !string.IsNullOrEmpty(myDebt.Creditor.BankName) &&
+                                        !string.IsNullOrEmpty(myDebt.Creditor.BankAccount)
+                                        ? IdEncoderHelper.CreatePaymentDescription(
+                                        myDebt.Creditor.CreditorId,
+                                        Model.CurrentUserId.Value,
+                                        Model.Year,
+                                        Model.Month
+                                        )
+                                        : "";
+                                        var roundedAmount = Math.Ceiling(myDebt.TotalMyDebt);
+                                    }
+
                                     @if (!string.IsNullOrEmpty(myDebt.Creditor.BankName) ||
                                                             !string.IsNullOrEmpty(myDebt.Creditor.BankAccount))
                                     {
@@ -130,19 +144,39 @@ Model.CurrentUserId.Value)))
                                             @if (!string.IsNullOrEmpty(myDebt.Creditor.BankName))
                                             {
                                                 <span>Ngân hàng: @myDebt.Creditor.BankName</span>
-
                                                 <br />
                                             }
                                             @if (!string.IsNullOrEmpty(myDebt.Creditor.BankAccount))
                                             {
-                                                <span>Số tài khoản: <strong>@myDebt.Creditor.BankAccount</strong></span>
-
+                                                <span>
+                                                    Số tài khoản: <strong>@myDebt.Creditor.BankAccount</strong>
+                                                    <button type="button" class="btn btn-sm btn-link p-0 ms-1"
+                                                        data-copy="@myDebt.Creditor.BankAccount" title="Copy số tài khoản">
+                                                        <i class="bi bi-clipboard"></i>
+                                                    </button>
+                                                </span>
                                                 <br />
                                             }
                                             @if (!string.IsNullOrEmpty(myDebt.Creditor.AccountHolderName))
                                             {
                                                 <span>Chủ tài khoản: @myDebt.Creditor.AccountHolderName</span>
+                                                <br />
                                             }
+                                            <span>
+                                                Số tiền: <strong>@roundedAmount.ToString("N0") đ</strong>
+                                                <button type="button" class="btn btn-sm btn-link p-0 ms-1"
+                                                    data-copy="@((int)roundedAmount)" title="Copy số tiền">
+                                                    <i class="bi bi-clipboard"></i>
+                                                </button>
+                                            </span>
+                                            <br />
+                                            <span>
+                                                Nội dung CK: <strong>@transferContent</strong>
+                                                <button type="button" class="btn btn-sm btn-link p-0 ms-1" data-copy="@transferContent"
+                                                    title="Copy nội dung chuyển khoản">
+                                                    <i class="bi bi-clipboard"></i>
+                                                </button>
+                                            </span>
                                         </p>
                                     }
 
@@ -181,7 +215,11 @@ Model.CurrentUserId.Value)))
                                             bankName = myDebt.Creditor.BankName,
                                             bankAccount = myDebt.Creditor.BankAccount,
                                             accountHolderName = myDebt.Creditor.AccountHolderName ?? "",
-                                            amount = myDebt.TotalMyDebt
+                                            amount = roundedAmount,
+                                            creditorId = myDebt.Creditor.CreditorId,
+                                            userId = Model.CurrentUserId.Value,
+                                            year = Model.Year,
+                                            month = Model.Month
                                         });
                                         <img src="@qrCodeUrl" alt="QR Code" class="img-fluid" style="max-width: 150px; cursor: pointer;"
                                             onclick="showQRCodeModal('@myDebt.Creditor.CreditorName', '@myDebt.TotalMyDebt.ToString("N0")', '@qrCodeUrl')" />
@@ -500,6 +538,43 @@ Model.CurrentUserId.Value)))
                 modal.show();
             }
             window.showQRCodeModal = showQRCodeModal;
+
+            // Copy to clipboard - đơn giản với data attribute
+            $(document).on('click', '[data-copy]', function () {
+                var textToCopy = $(this).data('copy');
+                var $icon = $(this).find('i');
+                var originalClass = $icon.attr('class');
+
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(textToCopy).then(function () {
+                        $icon.removeClass().addClass('bi bi-check');
+                        setTimeout(function () {
+                            $icon.removeClass().addClass(originalClass);
+                        }, 1000);
+                    }).catch(function (err) {
+                        console.error('Failed to copy:', err);
+                        // Fallback
+                        var textArea = $('<textarea>').val(textToCopy).css({ position: 'fixed', top: '-9999px' }).appendTo('body');
+                        textArea[0].select();
+                        document.execCommand('copy');
+                        textArea.remove();
+                        $icon.removeClass().addClass('bi bi-check');
+                        setTimeout(function () {
+                            $icon.removeClass().addClass(originalClass);
+                        }, 1000);
+                    });
+                } else {
+                    // Fallback cho trình duyệt cũ
+                    var textArea = $('<textarea>').val(textToCopy).css({ position: 'fixed', top: '-9999px' }).appendTo('body');
+                    textArea[0].select();
+                    document.execCommand('copy');
+                    textArea.remove();
+                    $icon.removeClass().addClass('bi bi-check');
+                    setTimeout(function () {
+                        $icon.removeClass().addClass(originalClass);
+                    }, 1000);
+                }
+            });
         });
     </script>
 }
