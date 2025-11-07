@@ -8,9 +8,10 @@ namespace QuanLyAnTrua.Helpers
     {
         private static string _prefix = "ThanToan"; // Default value
         private static string? _suffix = null; // Optional suffix
+        private static string _separator = "-"; // Default separator (dấu -)
 
         /// <summary>
-        /// Khởi tạo prefix và suffix từ configuration
+        /// Khởi tạo prefix, suffix và separator từ configuration
         /// Nên gọi method này trong Program.cs khi app start
         /// </summary>
         public static void Initialize(IConfiguration configuration)
@@ -26,6 +27,12 @@ namespace QuanLyAnTrua.Helpers
             {
                 _suffix = suffix.Trim();
             }
+
+            var separator = configuration["Payment:DescriptionSeparator"];
+            if (!string.IsNullOrWhiteSpace(separator))
+            {
+                _separator = separator.Trim();
+            }
         }
 
         /// <summary>
@@ -37,6 +44,11 @@ namespace QuanLyAnTrua.Helpers
         /// Lấy suffix hiện tại (có thể null)
         /// </summary>
         public static string? GetSuffix() => _suffix;
+
+        /// <summary>
+        /// Lấy separator hiện tại
+        /// </summary>
+        public static string GetSeparator() => _separator;
 
         /// <summary>
         /// Mã hóa ID người được thanh toán thành chuỗi ngắn (Base64Url)
@@ -109,8 +121,10 @@ namespace QuanLyAnTrua.Helpers
         }
 
         /// <summary>
-        /// Tạo description cho thanh toán với format: {Prefix}-{Base64UrlEncodedData}[-{Suffix}]
-        /// Trong đó Base64UrlEncodedData chứa: {encodedCreditorId}-{userId}-{year}-{month}
+        /// Tạo description cho thanh toán với format: {Prefix}{Base64UrlEncodedData}[{Suffix}]
+        /// Trong đó Base64UrlEncodedData chứa (sau khi decode): {encodedCreditorId}-{userId}-{year}-{month}
+        /// Lưu ý: Bên trong encoded data luôn dùng dấu "-" để phân tách
+        /// Không sử dụng separator vì parse logic chỉ dựa vào prefix và suffix để xác định đoạn Base64
         /// Suffix được giữ ở ngoài (không mã hóa) để dễ nhận biết phần cuối
         /// Toàn bộ dữ liệu được mã hóa để tránh lộ liễu
         /// </summary>
@@ -118,17 +132,19 @@ namespace QuanLyAnTrua.Helpers
         {
             var encodedCreditorId = EncodeCreditorId(creditorId);
             // Chỉ mã hóa phần data, không mã hóa suffix
+            // Bên trong data luôn dùng dấu "-" để phân tách
             var data = $"{encodedCreditorId}-{userId}-{year}-{month}";
 
             // Mã hóa data bằng Base64Url
             var encodedData = EncodeBase64Url(data);
 
-            // Format: {Prefix}-{Base64UrlEncodedData}[-{Suffix}]
+            // Format: {Prefix}{Base64UrlEncodedData}[{Suffix}]
+            // Không cần separator vì parse logic chỉ dựa vào prefix và suffix
             // Suffix được giữ ở ngoài để dễ nhận biết phần cuối
-            var description = $"{_prefix}-{encodedData}";
+            var description = $"{_prefix}{encodedData}";
             if (!string.IsNullOrWhiteSpace(_suffix))
             {
-                description += $"-{_suffix}";
+                description += _suffix;
             }
 
             return description;
@@ -137,8 +153,10 @@ namespace QuanLyAnTrua.Helpers
         /// <summary>
         /// Parse description để lấy creditorId, userId, year và month
         /// Trả về (creditorId, userId, year, month) nếu thành công, null nếu không đúng format
-        /// Format mới: {Prefix}-{Base64UrlEncodedData}
-        /// Trong đó Base64UrlEncodedData chứa: {encodedCreditorId}-{userId}-{year}-{month}[-{Suffix}]
+        /// Format: {Prefix}[Separator]{Base64UrlEncodedData}[Separator][{Suffix}]
+        /// Trong đó Base64UrlEncodedData chứa (sau khi decode): {encodedCreditorId}-{userId}-{year}-{month}
+        /// Logic: Chỉ dựa vào prefix và suffix để xác định đoạn Base64 cần parse
+        /// Loại bỏ tất cả ký tự không phải Base64 (vì separator có thể bị ngân hàng xóa)
         /// Xử lý trường hợp ngân hàng thêm tiền tố/hậu tố vào description
         /// </summary>
         public static (int creditorId, int userId, int year, int month)? ParsePaymentDescription(string? description)
@@ -157,37 +175,39 @@ namespace QuanLyAnTrua.Helpers
             // Lấy phần description từ prefix trở đi
             var normalizedDescription = description.Substring(prefixIndex).Trim();
 
-            // Nếu có suffix, tìm vị trí của suffix để xác định phần cần parse
-            // Format: prefix-Base64UrlEncodedData[-suffix]
+            // Tìm suffix (nếu có) để xác định phần cuối cần parse
+            int? suffixIndex = null;
             if (!string.IsNullOrWhiteSpace(_suffix))
             {
                 var suffixUpper = _suffix.ToUpperInvariant();
                 var suffixIndexInNormalized = normalizedDescription.ToUpperInvariant().IndexOf(suffixUpper);
-
-                if (suffixIndexInNormalized > 0)
+                if (suffixIndexInNormalized > _prefix.Length)
                 {
-                    // Lấy phần từ prefix đến suffix (không bao gồm suffix)
-                    normalizedDescription = normalizedDescription.Substring(0, suffixIndexInNormalized).Trim();
+                    suffixIndex = suffixIndexInNormalized;
                 }
             }
 
-            // Split theo '-' để lấy prefix và encoded data
-            // Format: prefix-Base64UrlEncodedData[-suffix]
-            var parts = normalizedDescription.Split(new[] { '-' }, StringSplitOptions.RemoveEmptyEntries);
+            // Lấy phần giữa prefix và suffix (hoặc từ sau prefix đến hết nếu không có suffix)
+            // Đây là phần có thể chứa Base64 data (có thể có separator hoặc không, có thể có ký tự ngân hàng thêm vào)
+            var startIndex = _prefix.Length;
+            var endIndex = suffixIndex ?? normalizedDescription.Length;
+            var middlePart = normalizedDescription.Substring(startIndex, endIndex - startIndex);
 
-            // Cần ít nhất 2 parts: prefix và encoded data
-            if (parts.Length < 2)
-                return null;
+            // Lọc chỉ lấy Base64Url characters (A-Z, a-z, 0-9, -, _)
+            // Loại bỏ tất cả ký tự khác (separator, khoảng trắng, ký tự đặc biệt ngân hàng thêm vào)
+            // Vì separator có thể bị ngân hàng xóa hoặc thay đổi, nên chỉ dựa vào prefix/suffix và Base64 characters
+            var encodedDataBuilder = new StringBuilder();
+            foreach (var ch in middlePart)
+            {
+                // Base64Url characters: A-Z, a-z, 0-9, -, _
+                if ((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') ||
+                    (ch >= '0' && ch <= '9') || ch == '-' || ch == '_')
+                {
+                    encodedDataBuilder.Append(ch);
+                }
+            }
 
-            var prefixPart = parts[0].Trim();
-
-            // parts[0] phải là prefix (so sánh không phân biệt hoa thường)
-            if (!string.Equals(prefixPart, _prefix, StringComparison.OrdinalIgnoreCase))
-                return null;
-
-            // parts[1] là Base64Url encoded data - decode nó
-            // Có thể có thêm parts sau đó (ngân hàng thêm hậu tố), chỉ lấy parts[1]
-            var encodedData = parts[1].Trim();
+            var encodedData = encodedDataBuilder.ToString().Trim();
 
             // Decode Base64Url để lấy data gốc
             var decodedData = DecodeBase64Url(encodedData);
@@ -195,7 +215,9 @@ namespace QuanLyAnTrua.Helpers
                 return null;
 
             // Parse decoded data: {encodedCreditorId}-{userId}-{year}-{month}
-            // Lưu ý: Suffix không được mã hóa trong Base64Url, nên không có trong decodedData
+            // Lưu ý: Bên trong decoded data luôn dùng dấu "-" để phân tách (không dùng separator từ config)
+            // Vì separator từ config chỉ dùng ở mức ngoài (giữa prefix, encodedData, suffix)
+            // Suffix không được mã hóa trong Base64Url, nên không có trong decodedData
             var dataParts = decodedData.Split(new[] { '-' }, StringSplitOptions.RemoveEmptyEntries);
 
             // Cần đúng 4 parts: encodedCreditorId, userId, year, month
