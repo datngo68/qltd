@@ -102,12 +102,12 @@
             </div>
 
             <div class="mb-3">
-                <label for="expireDays" class="form-label">
-                    <i class="bi bi-calendar-x"></i> Thời hạn (ngày) - Để trống nếu không giới hạn
+                <label for="expiresAt" class="form-label">
+                    <i class="bi bi-calendar-x"></i> Thời hạn hết hạn - Để trống nếu không giới hạn
                 </label>
-                <input type="number" class="form-control" id="expireDays" name="expireDays" min="1" max="365" />
-                <small class="text-muted">Link sẽ hết hạn sau số ngày được chỉ định. Để trống nếu muốn link không bao
-                    giờ hết hạn.</small>
+                <input type="datetime-local" class="form-control" id="expiresAt" name="expiresAt" />
+                <small class="text-muted">Chọn ngày và giờ chính xác khi link sẽ hết hạn. Để trống nếu muốn link không
+                    bao giờ hết hạn.</small>
             </div>
 
             <div class="mb-3 d-flex flex-column flex-md-row gap-2">

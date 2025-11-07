@@ -305,7 +305,7 @@ namespace QuanLyAnTrua.Controllers
         // POST: Reports/ShareLink
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> ShareLink(string reportType, int? userId, int? groupId, int? expireDays)
+        public async Task<IActionResult> ShareLink(string reportType, int? userId, int? groupId, DateTime? expiresAt)
         {
             var currentUserId = SessionHelper.GetUserId(HttpContext);
             if (currentUserId == null)
@@ -358,6 +358,13 @@ namespace QuanLyAnTrua.Controllers
                 }
             }
 
+            // Validate expiresAt - phải là thời gian trong tương lai
+            if (expiresAt.HasValue && expiresAt.Value <= DateTime.Now)
+            {
+                TempData["ErrorMessage"] = "Thời gian hết hạn phải là thời gian trong tương lai";
+                return RedirectToAction("ShareLink", new { year = DateTime.Now.Year, month = DateTime.Now.Month, reportType, userId, groupId });
+            }
+
             // Generate unique token
             string token;
             do
@@ -373,7 +380,7 @@ namespace QuanLyAnTrua.Controllers
                 GroupId = reportType == "Group" ? groupId : null,
                 CreatedBy = currentUserId.Value,
                 CreatedAt = DateTime.Now,
-                ExpiresAt = expireDays.HasValue ? DateTime.Now.AddDays(expireDays.Value) : null,
+                ExpiresAt = expiresAt,
                 IsActive = true
             };
 
