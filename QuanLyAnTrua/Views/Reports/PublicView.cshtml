@@ -145,8 +145,11 @@
             background: white;
             z-index: 150;
             padding: 10px 0;
+            margin-top: -2px; /* Overlap 2px để che kín border-bottom của quick-nav-bar */
             margin-bottom: 15px;
+            border-top: 2px solid #dee2e6; /* Border-top trùng với border-bottom của quick-nav-bar */
             border-bottom: 2px solid #dee2e6;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1); /* Thêm shadow để che kín */
             transition: top 0.3s ease;
         }
         .section-title {
@@ -222,7 +225,7 @@
             background: white;
             z-index: 200;
             padding: 10px;
-            margin-bottom: 15px;
+            margin-bottom: 0; /* Loại bỏ margin để không có khe hở */
             border-bottom: 2px solid #dee2e6;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
@@ -1058,9 +1061,11 @@
             const quickNavHeight = getQuickNavHeight();
             
             if (quickNavHeight > 0) {
-                // Thêm một chút padding để không bị sát
-                const topValue = quickNavHeight + 5;
-                const scrollMarginTop = quickNavHeight + 60; // Thêm chiều cao sticky-header
+                // Đặt top = quickNavHeight - 2px để overlap và che kín border
+                // (vì sticky-header có margin-top: -2px)
+                const topValue = quickNavHeight - 2;
+                // Tính toán scroll-margin-top: chiều cao quick-nav + chiều cao sticky-header (khoảng 60px)
+                const scrollMarginTop = quickNavHeight + 58; // Trừ 2px vì đã overlap
                 
                 stickyHeaders.forEach(header => {
                     header.style.top = topValue + 'px';
