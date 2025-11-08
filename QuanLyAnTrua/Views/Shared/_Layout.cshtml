@@ -63,6 +63,12 @@
                                 <span id="pendingPaymentsBadge" style="display: none;"></span>
                             </a>
                         </li>
+                        <li class="nav-item">
+                            <a class="nav-link text-dark" asp-area="" asp-controller="ParkingPayment"
+                                asp-action="Index">
+                                <i class="bi bi-qr-code-scan"></i> QR Thanh toán xe
+                            </a>
+                        </li>
                     </ul>
                     <ul class="navbar-nav">
                         @if (Context.Session.GetString("FullName") != null)

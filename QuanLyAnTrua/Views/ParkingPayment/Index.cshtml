@@ -1,0 +1,510 @@
+@{
+    Layout = "_PublicLayout";
+    ViewData["Title"] = "Tạo QR thanh toán phí giữ xe";
+    var currentMonth = ViewBag.CurrentMonth ?? DateTime.Now.Month;
+    var currentYear = ViewBag.CurrentYear ?? DateTime.Now.Year;
+    var defaultLicensePlate = ViewBag.DefaultLicensePlate ?? "15D1-41770";
+    var priceMotorbike = ViewBag.PriceMotorbike ?? 70000m;
+    var priceCar = ViewBag.PriceCar ?? 700000m;
+    var priceCarOvernight = ViewBag.PriceCarOvernight ?? 900000m;
+}
+
+<h2><i class="bi bi-qr-code-scan"></i> Tạo QR thanh toán phí giữ xe</h2>
+<hr />
+
+<!-- Lịch sử QR đã tạo -->
+<div id="qrHistorySection" style="display: none;" class="mb-4">
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="bi bi-clock-history"></i> Lịch sử QR đã tạo</h5>
+            <button class="btn btn-sm btn-outline-danger" onclick="clearQRHistory()">
+                <i class="bi bi-trash"></i> Xóa tất cả
+            </button>
+        </div>
+        <div class="card-body">
+            <div id="qrHistoryList" class="row">
+                <!-- Danh sách QR sẽ được load từ localStorage -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="alert alert-info">
+    <h5><i class="bi bi-info-circle"></i> Quy định về thời hạn thanh toán:</h5>
+    <ul class="mb-0">
+        <li><strong>Từ ngày 01 đến ngày 10 hàng tháng:</strong> Quý khách hàng vui lòng thanh toán phí giữ xe tháng theo
+            quy định.</li>
+        <li><strong>Sau ngày 10:</strong> Hệ thống sẽ thông báo "Vé tháng hết hạn" cho các trường hợp xe quá hạn thanh
+            toán khi ra/vào trạm kiểm soát, chuyển sang thu phí như xe vãng lai.</li>
+    </ul>
+</div>
+
+<div class="row">
+    <div class="col-12 col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-credit-card"></i> Thông tin thanh toán</h5>
+            </div>
+            <div class="card-body">
+                <form asp-action="GenerateQR" method="post" id="paymentForm">
+                    <div class="mb-3">
+                        <label for="licensePlate" class="form-label">
+                            <i class="bi bi-car-front"></i> Biển số xe <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" class="form-control" id="licensePlate" name="licensePlate"
+                            value="@defaultLicensePlate" required pattern="[A-Z0-9\-]+" maxlength="20"
+                            title="Nhập biển số xe (chỉ chữ cái, số và dấu gạch ngang)">
+                        <small class="form-text text-muted">Có thể chỉnh sửa biển số xe (tối đa 20 ký tự)</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">
+                            <i class="bi bi-bicycle"></i> Loại xe <span class="text-danger">*</span>
+                        </label>
+                        <div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="vehicleType" id="vehicleMotorbike"
+                                    value="motorbike" checked>
+                                <label class="form-check-label" for="vehicleMotorbike">
+                                    <strong>Xe máy</strong> - @priceMotorbike.ToString("N0") đ/tháng
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="vehicleType" id="vehicleCar"
+                                    value="car">
+                                <label class="form-check-label" for="vehicleCar">
+                                    <strong>Ô tô</strong> - @priceCar.ToString("N0") đ/tháng
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="vehicleType" id="vehicleCarOvernight"
+                                    value="car_overnight">
+                                <label class="form-check-label" for="vehicleCarOvernight">
+                                    <strong>Ô tô qua đêm</strong> - @priceCarOvernight.ToString("N0") đ/tháng
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="fromMonth" class="form-label">
+                                <i class="bi bi-calendar-month"></i> Từ tháng <span class="text-danger">*</span>
+                            </label>
+                            <select class="form-select" id="fromMonth" name="fromMonth" required
+                                onchange="calculateTotal()">
+                                @for (int m = 1; m <= 12; m++)
+                                {
+                                    <option value="@m" selected="@(m == currentMonth)">Tháng @m</option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label for="fromYear" class="form-label">
+                                <i class="bi bi-calendar"></i> Năm bắt đầu <span class="text-danger">*</span>
+                            </label>
+                            <select class="form-select" id="fromYear" name="fromYear" required
+                                onchange="calculateTotal()">
+                                @for (int y = currentYear - 1; y <= currentYear + 1; y++)
+                                {
+                                    <option value="@y" selected="@(y == currentYear)">@y</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="toMonth" class="form-label">
+                                <i class="bi bi-calendar-month"></i> Đến tháng <span class="text-danger">*</span>
+                            </label>
+                            <select class="form-select" id="toMonth" name="toMonth" required
+                                onchange="calculateTotal()">
+                                @for (int m = 1; m <= 12; m++)
+                                {
+                                    <option value="@m" selected="@(m == currentMonth)">Tháng @m</option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label for="toYear" class="form-label">
+                                <i class="bi bi-calendar"></i> Năm kết thúc <span class="text-danger">*</span>
+                            </label>
+                            <select class="form-select" id="toYear" name="toYear" required onchange="calculateTotal()">
+                                @for (int y = currentYear - 1; y <= currentYear + 1; y++)
+                                {
+                                    <option value="@y" selected="@(y == currentYear)">@y</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-success" id="totalAmountAlert" style="display: none;">
+                        <h6 class="mb-1"><i class="bi bi-calculator"></i> Tổng tiền:</h6>
+                        <p class="mb-0">
+                            <span id="totalMonths">0</span> tháng × <span id="pricePerMonth">0</span> đ =
+                            <strong class="text-success" id="totalAmount">0</strong> đ
+                        </p>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">
+                            <i class="bi bi-bank"></i> Tài khoản nhận tiền <span class="text-danger">*</span>
+                        </label>
+                        <div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="accountType" id="accountCompany"
+                                    value="company" checked>
+                                <label class="form-check-label" for="accountCompany">
+                                    <strong>Tài khoản công ty</strong><br>
+                                    <small class="text-muted">
+                                        Tên TK: Công ty TNHH MTV Dịch vụ Xây dựng Thịnh Thái<br>
+                                        Số TK: 8601276666<br>
+                                        Ngân hàng: BIDV
+                                    </small>
+                                </label>
+                            </div>
+                            <div class="form-check mt-2">
+                                <input class="form-check-input" type="radio" name="accountType" id="accountStaff"
+                                    value="staff">
+                                <label class="form-check-label" for="accountStaff">
+                                    <strong>Tài khoản nhân viên CSKH</strong><br>
+                                    <small class="text-muted">
+                                        Tên TK: Nguyễn Thanh Thảo<br>
+                                        Số TK: 0936.187.187<br>
+                                        Ngân hàng: MB Bank
+                                    </small>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="customAmount" class="form-label">
+                            <i class="bi bi-currency-dollar"></i> Số tiền tùy chỉnh (nếu khác với tính toán)
+                        </label>
+                        <input type="number" class="form-control" id="customAmount" name="customAmount"
+                            placeholder="Để trống để dùng số tiền tự động tính" min="0" max="100000000" step="1000">
+                        <small class="form-text text-muted">Nếu nhập số tiền này, hệ thống sẽ dùng số tiền này thay vì
+                            tính tự động (tối đa 100 triệu VNĐ)</small>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-qr-code"></i> Tạo QR Code
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-info-circle"></i> Hướng dẫn</h5>
+            </div>
+            <div class="card-body">
+                <p><strong>Bảng giá:</strong></p>
+                <ul class="mb-3">
+                    <li>Xe máy: @priceMotorbike.ToString("N0") đ/tháng</li>
+                    <li>Ô tô: @priceCar.ToString("N0") đ/tháng</li>
+                    <li>Ô tô qua đêm: @priceCarOvernight.ToString("N0") đ/tháng</li>
+                </ul>
+                <p><strong>Nội dung chuyển khoản:</strong></p>
+                <p class="bg-light p-2 rounded">
+                    <code>[Biển số xe] thanh toán phí xe tháng [MM/YYYY] đến [MM/YYYY]</code>
+                </p>
+                <p class="mb-0"><strong>Ví dụ:</strong></p>
+                <p class="bg-light p-2 rounded mb-0">
+                    <code>15D1-41770 thanh toán phí xe tháng 01/2025 đến 03/2025</code>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        const PRICES = {
+            motorbike: @priceMotorbike,
+            car: @priceCar,
+            car_overnight: @priceCarOvernight
+                                            };
+
+        // Lưu vào localStorage
+        const STORAGE_KEY_LICENSE_PLATE = 'parking_payment_license_plate';
+        const STORAGE_KEY_VEHICLE_TYPE = 'parking_payment_vehicle_type';
+        const STORAGE_KEY_QR_HISTORY = 'parking_payment_qr_history';
+
+        // Tạo key duy nhất cho QR
+        function generateQRKey(licensePlate, vehicleType, fromMonth, fromYear, toMonth, toYear, accountType) {
+            return `${licensePlate}_${vehicleType}_${fromMonth}_${fromYear}_${toMonth}_${toYear}_${accountType}`.toUpperCase();
+        }
+
+        // Lấy danh sách QR history
+        function getQRHistory() {
+            const historyJson = localStorage.getItem(STORAGE_KEY_QR_HISTORY);
+            return historyJson ? JSON.parse(historyJson) : [];
+        }
+
+        // Lưu QR vào history
+        function saveQRToHistory(qrData) {
+            const history = getQRHistory();
+            const key = generateQRKey(
+                qrData.licensePlate,
+                qrData.vehicleType,
+                qrData.fromMonth,
+                qrData.fromYear,
+                qrData.toMonth,
+                qrData.toYear,
+                qrData.accountType
+            );
+
+            // Kiểm tra xem đã tồn tại chưa
+            const existingIndex = history.findIndex(qr => qr.key === key);
+            if (existingIndex >= 0) {
+                // Cập nhật thời gian tạo
+                history[existingIndex].createdAt = new Date().toISOString();
+            } else {
+                // Thêm mới
+                history.unshift({
+                    key: key,
+                    ...qrData,
+                    createdAt: new Date().toISOString()
+                });
+            }
+
+            // Giới hạn tối đa 50 QR
+            if (history.length > 50) {
+                history.splice(50);
+            }
+
+            localStorage.setItem(STORAGE_KEY_QR_HISTORY, JSON.stringify(history));
+        }
+
+        // Kiểm tra QR đã tồn tại chưa
+        function checkQRExists(licensePlate, vehicleType, fromMonth, fromYear, toMonth, toYear, accountType) {
+            const history = getQRHistory();
+            const key = generateQRKey(licensePlate, vehicleType, fromMonth, fromYear, toMonth, toYear, accountType);
+            return history.find(qr => qr.key === key);
+        }
+
+        // Load và hiển thị lịch sử QR
+        function loadQRHistory() {
+            const history = getQRHistory();
+            const historyList = document.getElementById('qrHistoryList');
+            const historySection = document.getElementById('qrHistorySection');
+
+            if (history.length === 0) {
+                historySection.style.display = 'none';
+                return;
+            }
+
+            historySection.style.display = 'block';
+            historyList.innerHTML = '';
+
+            history.forEach((qr, index) => {
+                const createdAt = new Date(qr.createdAt);
+                const periodText = qr.totalMonths === 1
+                    ? `Tháng ${qr.fromMonth.toString().padStart(2, '0')}/${qr.fromYear}`
+                    : `Tháng ${qr.fromMonth.toString().padStart(2, '0')}/${qr.fromYear} đến ${qr.toMonth.toString().padStart(2, '0')}/${qr.toYear}`;
+
+                const card = document.createElement('div');
+                card.className = 'col-12 col-md-6 col-lg-4 mb-3';
+                card.innerHTML = `
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <h6 class="card-title">
+                                        <i class="bi bi-car-front"></i> ${qr.licensePlate}
+                                        <button class="btn btn-sm btn-link text-danger float-end p-0" onclick="removeQRFromHistory('${qr.key}')" title="Xóa">
+                                            <i class="bi bi-x-circle"></i>
+                                        </button>
+                                    </h6>
+                                    <p class="card-text mb-1">
+                                        <small class="text-muted">
+                                            <i class="bi bi-bicycle"></i> ${qr.vehicleTypeName}<br>
+                                            <i class="bi bi-calendar"></i> ${periodText}<br>
+                                            <i class="bi bi-currency-dollar"></i> ${parseInt(qr.totalAmount).toLocaleString('vi-VN')} đ<br>
+                                            <i class="bi bi-clock"></i> ${createdAt.toLocaleString('vi-VN')}
+                                        </small>
+                                    </p>
+                                    <button class="btn btn-sm btn-primary w-100" onclick="recreateQR('${qr.key}')">
+                                        <i class="bi bi-qr-code"></i> Tạo lại QR
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                historyList.appendChild(card);
+            });
+        }
+
+        // Xóa QR khỏi history
+        function removeQRFromHistory(key) {
+            if (!confirm('Bạn có chắc muốn xóa QR này khỏi lịch sử?')) {
+                return;
+            }
+
+            const history = getQRHistory();
+            const filtered = history.filter(qr => qr.key !== key);
+            localStorage.setItem(STORAGE_KEY_QR_HISTORY, JSON.stringify(filtered));
+            loadQRHistory();
+        }
+
+        // Xóa tất cả lịch sử
+        function clearQRHistory() {
+            if (!confirm('Bạn có chắc muốn xóa tất cả lịch sử QR?')) {
+                return;
+            }
+
+            localStorage.removeItem(STORAGE_KEY_QR_HISTORY);
+            loadQRHistory();
+        }
+
+        // Tạo lại QR từ history
+        function recreateQR(key) {
+            const history = getQRHistory();
+            const qr = history.find(q => q.key === key);
+            if (!qr) return;
+
+            // Điền form
+            document.getElementById('licensePlate').value = qr.licensePlate;
+            document.querySelector(`input[name="vehicleType"][value="${qr.vehicleType}"]`).checked = true;
+            document.getElementById('fromMonth').value = qr.fromMonth;
+            document.getElementById('fromYear').value = qr.fromYear;
+            document.getElementById('toMonth').value = qr.toMonth;
+            document.getElementById('toYear').value = qr.toYear;
+            document.querySelector(`input[name="accountType"][value="${qr.accountType}"]`).checked = true;
+
+            // Scroll đến form
+            document.getElementById('paymentForm').scrollIntoView({ behavior: 'smooth' });
+            calculateTotal();
+        }
+
+        // Load từ localStorage khi trang load
+        function loadSavedData() {
+            const savedLicensePlate = localStorage.getItem(STORAGE_KEY_LICENSE_PLATE);
+            const savedVehicleType = localStorage.getItem(STORAGE_KEY_VEHICLE_TYPE);
+
+            if (savedLicensePlate) {
+                document.getElementById('licensePlate').value = savedLicensePlate;
+            }
+
+            if (savedVehicleType) {
+                // Map vehicle type value to radio button ID
+                let radioId = '';
+                if (savedVehicleType === 'motorbike') {
+                    radioId = 'vehicleMotorbike';
+                } else if (savedVehicleType === 'car') {
+                    radioId = 'vehicleCar';
+                } else if (savedVehicleType === 'car_overnight') {
+                    radioId = 'vehicleCarOvernight';
+                }
+
+                if (radioId) {
+                    const vehicleTypeRadio = document.getElementById(radioId);
+                    if (vehicleTypeRadio) {
+                        vehicleTypeRadio.checked = true;
+                    }
+                }
+            }
+        }
+
+        // Lưu biển số xe vào localStorage
+        function saveLicensePlate() {
+            const licensePlate = document.getElementById('licensePlate').value.trim();
+            if (licensePlate) {
+                localStorage.setItem(STORAGE_KEY_LICENSE_PLATE, licensePlate);
+            }
+        }
+
+        // Lưu loại xe vào localStorage
+        function saveVehicleType() {
+            const vehicleType = document.querySelector('input[name="vehicleType"]:checked');
+            if (vehicleType) {
+                localStorage.setItem(STORAGE_KEY_VEHICLE_TYPE, vehicleType.value);
+            }
+        }
+
+        // Tự động chuyển biển số xe sang chữ hoa và lưu
+        document.getElementById('licensePlate').addEventListener('input', function (e) {
+            e.target.value = e.target.value.toUpperCase();
+            saveLicensePlate();
+        });
+
+        // Lưu loại xe khi thay đổi
+        document.querySelectorAll('input[name="vehicleType"]').forEach(function (radio) {
+            radio.addEventListener('change', function () {
+                saveVehicleType();
+                calculateTotal();
+            });
+        });
+
+        // Tính tổng tiền
+        function calculateTotal() {
+            const vehicleType = document.querySelector('input[name="vehicleType"]:checked').value;
+            const fromMonth = parseInt(document.getElementById('fromMonth').value);
+            const fromYear = parseInt(document.getElementById('fromYear').value);
+            const toMonth = parseInt(document.getElementById('toMonth').value);
+            const toYear = parseInt(document.getElementById('toYear').value);
+
+            // Tính số tháng
+            const totalMonths = ((toYear - fromYear) * 12) + (toMonth - fromMonth) + 1;
+            const MAX_MONTHS = 12;
+
+            if (totalMonths <= 0) {
+                document.getElementById('totalAmountAlert').style.display = 'none';
+                return;
+            }
+
+            if (totalMonths > MAX_MONTHS) {
+                document.getElementById('totalAmountAlert').className = 'alert alert-warning';
+                document.getElementById('totalAmountAlert').innerHTML =
+                    `<h6 class="mb-1"><i class="bi bi-exclamation-triangle"></i> Cảnh báo:</h6>
+                                             <p class="mb-0">Chỉ có thể thanh toán tối đa ${MAX_MONTHS} tháng một lần. Vui lòng chọn lại khoảng thời gian.</p>`;
+                document.getElementById('totalAmountAlert').style.display = 'block';
+                return;
+            }
+
+            const pricePerMonth = PRICES[vehicleType];
+            const totalAmount = pricePerMonth * totalMonths;
+
+            // Hiển thị kết quả
+            document.getElementById('totalAmountAlert').className = 'alert alert-success';
+            document.getElementById('totalAmountAlert').innerHTML =
+                `<h6 class="mb-1"><i class="bi bi-calculator"></i> Tổng tiền:</h6>
+                                         <p class="mb-0">
+                                             <span id="totalMonths">${totalMonths}</span> tháng × <span id="pricePerMonth">${pricePerMonth.toLocaleString('vi-VN')}</span> đ = 
+                                             <strong class="text-success" id="totalAmount">${totalAmount.toLocaleString('vi-VN')}</strong> đ
+                                         </p>`;
+            document.getElementById('totalAmountAlert').style.display = 'block';
+        }
+
+        // Kiểm tra trùng lặp trước khi submit
+        document.getElementById('paymentForm').addEventListener('submit', function (e) {
+            const licensePlate = document.getElementById('licensePlate').value.trim().toUpperCase();
+            const vehicleType = document.querySelector('input[name="vehicleType"]:checked').value;
+            const fromMonth = parseInt(document.getElementById('fromMonth').value);
+            const fromYear = parseInt(document.getElementById('fromYear').value);
+            const toMonth = parseInt(document.getElementById('toMonth').value);
+            const toYear = parseInt(document.getElementById('toYear').value);
+            const accountType = document.querySelector('input[name="accountType"]:checked').value;
+
+            const existingQR = checkQRExists(licensePlate, vehicleType, fromMonth, fromYear, toMonth, toYear, accountType);
+
+            if (existingQR) {
+                if (!confirm('QR code này đã được tạo trước đó. Bạn có muốn tạo lại không?')) {
+                    e.preventDefault();
+                    return false;
+                }
+            }
+        });
+
+        // Tính toán khi trang load
+        document.addEventListener('DOMContentLoaded', function () {
+            loadSavedData();
+            loadQRHistory();
+            calculateTotal();
+        });
+    </script>
+}

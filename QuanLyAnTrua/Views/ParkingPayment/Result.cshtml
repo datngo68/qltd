@@ -1,0 +1,248 @@
+@{
+    Layout = "_PublicLayout";
+    ViewData["Title"] = "QR Code thanh toán phí giữ xe";
+    var qrBase64 = ViewBag.QRCodeBase64 as string;
+    var licensePlate = ViewBag.LicensePlate as string;
+    var vehicleTypeName = ViewBag.VehicleTypeName as string ?? "xe máy";
+    var fromMonth = (int)ViewBag.FromMonth;
+    var fromYear = (int)ViewBag.FromYear;
+    var toMonth = (int)ViewBag.ToMonth;
+    var toYear = (int)ViewBag.ToYear;
+    var totalMonths = (int)ViewBag.TotalMonths;
+    var pricePerMonth = (decimal)ViewBag.PricePerMonth;
+    var totalAmount = (decimal)ViewBag.TotalAmount;
+    var vehicleType = ViewBag.VehicleType as string ?? "motorbike";
+    var accountType = ViewBag.AccountType as string;
+    var bankName = ViewBag.BankName as string;
+    var accountNumber = ViewBag.AccountNumber as string;
+    var accountHolder = ViewBag.AccountHolder as string;
+    var description = ViewBag.Description as string;
+}
+
+<h2><i class="bi bi-qr-code-scan"></i> QR Code thanh toán phí giữ xe</h2>
+<hr />
+
+<div class="row">
+    <div class="col-12 col-md-6">
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-qr-code"></i> QR Code</h5>
+            </div>
+            <div class="card-body text-center">
+                @if (!string.IsNullOrEmpty(qrBase64))
+                {
+                    <img src="data:image/png;base64,@qrBase64" alt="QR Code" class="img-fluid" style="max-width: 400px;">
+                    <div class="mt-3">
+                        <button class="btn btn-primary" onclick="downloadQR()">
+                            <i class="bi bi-download"></i> Tải xuống QR Code
+                        </button>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-md-6">
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-info-circle"></i> Thông tin thanh toán</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-borderless">
+                    <tr>
+                        <th width="40%">Biển số xe:</th>
+                        <td><strong>@licensePlate</strong></td>
+                    </tr>
+                    <tr>
+                        <th>Loại xe:</th>
+                        <td><strong>@vehicleTypeName</strong></td>
+                    </tr>
+                    <tr>
+                        <th>Kỳ thanh toán:</th>
+                        <td>
+                            @if (totalMonths == 1)
+                            {
+                                <strong>Tháng @fromMonth.ToString("D2")/@fromYear</strong>
+                            }
+                            else
+                            {
+                                <strong>Tháng @fromMonth.ToString("D2")/@fromYear đến
+                                    @toMonth.ToString("D2")/@toYear</strong>
+                            }
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Số tháng:</th>
+                        <td><strong>@totalMonths tháng</strong></td>
+                    </tr>
+                    <tr>
+                        <th>Giá/tháng:</th>
+                        <td><strong>@pricePerMonth.ToString("N0") đ</strong></td>
+                    </tr>
+                    <tr>
+                        <th>Tổng tiền:</th>
+                        <td><strong class="text-success fs-5">@totalAmount.ToString("N0") đ</strong></td>
+                    </tr>
+                    <tr>
+                        <th>Tên tài khoản:</th>
+                        <td>@accountHolder</td>
+                    </tr>
+                    <tr>
+                        <th>Số tài khoản:</th>
+                        <td><strong>@accountNumber</strong></td>
+                    </tr>
+                    <tr>
+                        <th>Ngân hàng:</th>
+                        <td>@bankName</td>
+                    </tr>
+                    <tr>
+                        <th>Nội dung CK:</th>
+                        <td>
+                            <div class="bg-light p-2 rounded">
+                                <code>@description</code>
+                            </div>
+                            <button class="btn btn-sm btn-outline-secondary mt-2" onclick="copyContent()">
+                                <i class="bi bi-clipboard"></i> Copy nội dung
+                            </button>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-3">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-list-check"></i> Quy định về thời hạn thanh toán</h5>
+            </div>
+            <div class="card-body">
+                <ul class="mb-0">
+                    <li><strong>Từ ngày 01 đến ngày 10 hàng tháng:</strong> Quý khách hàng vui lòng thanh toán phí giữ
+                        xe tháng theo quy định.</li>
+                    <li><strong>Sau ngày 10:</strong> Hệ thống sẽ thông báo "Vé tháng hết hạn" cho các trường hợp xe quá
+                        hạn thanh toán khi ra/vào trạm kiểm soát, chuyển sang thu phí như xe vãng lai.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="mt-3">
+    <a asp-action="Index" class="btn btn-secondary">
+        <i class="bi bi-arrow-left"></i> Tạo QR Code mới
+    </a>
+</div>
+
+@section Scripts {
+    <script>
+        // Lưu QR vào history khi trang load
+        document.addEventListener('DOMContentLoaded', function () {
+            const qrData = {
+                licensePlate: @Html.Raw(Json.Serialize(licensePlate)),
+                vehicleType: @Html.Raw(Json.Serialize(vehicleType)),
+                vehicleTypeName: @Html.Raw(Json.Serialize(vehicleTypeName)),
+                fromMonth: @fromMonth,
+                fromYear: @fromYear,
+                toMonth: @toMonth,
+                toYear: @toYear,
+                totalMonths: @totalMonths,
+                pricePerMonth: @pricePerMonth,
+                totalAmount: @totalAmount,
+                accountType: @Html.Raw(Json.Serialize(accountType)),
+                bankName: @Html.Raw(Json.Serialize(bankName)),
+                accountNumber: @Html.Raw(Json.Serialize(accountNumber)),
+                accountHolder: @Html.Raw(Json.Serialize(accountHolder)),
+                description: @Html.Raw(Json.Serialize(description))
+                    };
+
+            // Lưu vào localStorage
+            const STORAGE_KEY_QR_HISTORY = 'parking_payment_qr_history';
+
+            function generateQRKey(licensePlate, vehicleType, fromMonth, fromYear, toMonth, toYear, accountType) {
+                return `${licensePlate}_${vehicleType}_${fromMonth}_${fromYear}_${toMonth}_${toYear}_${accountType}`.toUpperCase();
+            }
+
+            function saveQRToHistory(qrData) {
+                const historyJson = localStorage.getItem(STORAGE_KEY_QR_HISTORY);
+                const history = historyJson ? JSON.parse(historyJson) : [];
+                const key = generateQRKey(
+                    qrData.licensePlate,
+                    qrData.vehicleType,
+                    qrData.fromMonth,
+                    qrData.fromYear,
+                    qrData.toMonth,
+                    qrData.toYear,
+                    qrData.accountType
+                );
+
+                // Kiểm tra xem đã tồn tại chưa
+                const existingIndex = history.findIndex(qr => qr.key === key);
+                if (existingIndex >= 0) {
+                    // Cập nhật thời gian tạo
+                    history[existingIndex] = {
+                        key: key,
+                        ...qrData,
+                        createdAt: new Date().toISOString()
+                    };
+                } else {
+                    // Thêm mới
+                    history.unshift({
+                        key: key,
+                        ...qrData,
+                        createdAt: new Date().toISOString()
+                    });
+                }
+
+                // Giới hạn tối đa 50 QR
+                if (history.length > 50) {
+                    history.splice(50);
+                }
+
+                localStorage.setItem(STORAGE_KEY_QR_HISTORY, JSON.stringify(history));
+            }
+
+            saveQRToHistory(qrData);
+        });
+
+        function downloadQR() {
+            const img = document.querySelector('img[alt="QR Code"]');
+            if (img) {
+                const link = document.createElement('a');
+                link.href = img.src;
+                @{
+                        var fileName = $"{licensePlate}_{fromMonth:D2}{fromYear}";
+                        if (totalMonths > 1)
+                        {
+                                                                        fileName += $"_{toMonth:D2}{toYear}";
+                        }
+                                                    fileName = fileName.Replace("-", "_").Replace(" ", "_").ToUpper();
+                        var fullFileName = $"QR_{fileName}.png";
+                    }
+                    link.download = '@fullFileName';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        }
+
+        function copyContent() {
+            const content = '@description';
+            navigator.clipboard.writeText(content).then(function () {
+                alert('Đã copy nội dung chuyển khoản vào clipboard!');
+            }, function (err) {
+                console.error('Lỗi khi copy:', err);
+                // Fallback: tạo textarea để copy
+                const textarea = document.createElement('textarea');
+                textarea.value = content;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+                alert('Đã copy nội dung chuyển khoản vào clipboard!');
+            });
+        }
+    </script>
+}
