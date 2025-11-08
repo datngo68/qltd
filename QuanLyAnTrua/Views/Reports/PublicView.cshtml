@@ -141,12 +141,13 @@
         /* Sticky header for mobile */
         .sticky-header {
             position: sticky;
-            top: 0;
+            top: 0; /* Sẽ được điều chỉnh bằng JavaScript */
             background: white;
-            z-index: 100;
+            z-index: 150;
             padding: 10px 0;
             margin-bottom: 15px;
             border-bottom: 2px solid #dee2e6;
+            transition: top 0.3s ease;
         }
         .section-title {
             font-size: 1.25rem;
@@ -213,6 +214,121 @@
         .loading-banks {
             text-align: center;
             padding: 20px;
+        }
+        /* Thanh điều hướng nhanh */
+        .quick-nav-bar {
+            position: sticky;
+            top: 0;
+            background: white;
+            z-index: 200;
+            padding: 10px;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #dee2e6;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .quick-nav-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            user-select: none;
+        }
+        .quick-nav-title {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #495057;
+            margin: 0;
+            flex: 1;
+        }
+        .quick-nav-toggle {
+            font-size: 1.2rem;
+            color: #667eea;
+            transition: transform 0.3s ease;
+        }
+        .quick-nav-toggle.rotated {
+            transform: rotate(180deg);
+        }
+        .quick-nav-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
+        .quick-nav-content.expanded {
+            max-height: 200px;
+            margin-top: 10px;
+        }
+        .quick-nav-buttons {
+            display: flex;
+            flex-wrap: nowrap;
+            gap: 6px;
+            overflow-x: auto;
+            overflow-y: hidden;
+            padding-bottom: 5px;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: thin;
+        }
+        .quick-nav-buttons::-webkit-scrollbar {
+            height: 4px;
+        }
+        .quick-nav-buttons::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        .quick-nav-buttons::-webkit-scrollbar-thumb {
+            background: #667eea;
+            border-radius: 10px;
+        }
+        .quick-nav-btn {
+            padding: 5px 10px;
+            font-size: 0.8rem;
+            border-radius: 15px;
+            white-space: nowrap;
+            transition: all 0.3s ease;
+            flex-shrink: 0;
+        }
+        .quick-nav-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+        }
+        .quick-nav-btn.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: transparent;
+        }
+        @@media (min-width: 768px) {
+            .quick-nav-bar {
+                padding: 20px;
+            }
+            .quick-nav-title {
+                font-size: 1rem;
+            }
+            .quick-nav-content {
+                max-height: none !important;
+                margin-top: 10px;
+            }
+            .quick-nav-header {
+                cursor: default;
+            }
+            .quick-nav-toggle {
+                display: none;
+            }
+            .quick-nav-buttons {
+                flex-wrap: wrap;
+                overflow-x: visible;
+            }
+            .quick-nav-btn {
+                padding: 8px 16px;
+                font-size: 0.9rem;
+            }
+        }
+        /* Section với ID để scroll đến */
+        .debtor-section {
+            scroll-margin-top: 100px; /* Mobile: thanh điều hướng đóng + sticky header */
+        }
+        @@media (min-width: 768px) {
+            .debtor-section {
+                scroll-margin-top: 150px; /* Desktop: thanh điều hướng + sticky header */
+            }
         }
     </style>
 </head>
@@ -367,14 +483,38 @@
             
             @if (groupedByUser.Any())
             {
+                @* Thanh điều hướng nhanh *@
+                <div class="quick-nav-bar">
+                    <div class="quick-nav-header" onclick="toggleQuickNav()">
+                        <div class="quick-nav-title">
+                            <i class="bi bi-arrow-down-circle"></i> Chuyển nhanh đến phần nợ
+                        </div>
+                        <i class="bi bi-chevron-down quick-nav-toggle" id="quickNavToggle"></i>
+                    </div>
+                    <div class="quick-nav-content" id="quickNavContent">
+                        <div class="quick-nav-buttons">
+                            @foreach (var userGroup in groupedByUser)
+                            {
+                                var userInfo = userGroup.First();
+                                <button class="btn btn-outline-primary quick-nav-btn" 
+                                        onclick="scrollToDebtor('debtor-@userInfo.UserId')"
+                                        data-debtor-id="debtor-@userInfo.UserId">
+                                    @userInfo.UserName
+                                </button>
+                            }
+                        </div>
+                    </div>
+                </div>
+
                 @foreach (var userGroup in groupedByUser)
                 {
                     var userInfo = userGroup.First();
-                    <div class="sticky-header">
-                        <h3 class="section-title mb-0">
-                            <i class="bi bi-credit-card-2-front"></i> @userInfo.UserName cần trả cho
-                        </h3>
-                    </div>
+                    <div id="debtor-@userInfo.UserId" class="debtor-section">
+                        <div class="sticky-header">
+                            <h3 class="section-title mb-0">
+                                <i class="bi bi-credit-card-2-front"></i> @userInfo.UserName cần trả cho
+                            </h3>
+                        </div>
                     <div class="row mb-4">
                         @foreach (var myDebt in userGroup)
                         {
@@ -627,6 +767,7 @@
                             </div>
                         }
                     </div>
+                    </div> @* Đóng debtor-section *@
                     <hr />
                 }
             }
@@ -900,6 +1041,211 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        // Hàm tính toán chiều cao thực tế của thanh điều hướng
+        function getQuickNavHeight() {
+            const quickNavBar = document.querySelector('.quick-nav-bar');
+            if (!quickNavBar) return 0;
+            
+            // Đo chiều cao thực tế của thanh điều hướng
+            const rect = quickNavBar.getBoundingClientRect();
+            return rect.height;
+        }
+
+        // Hàm cập nhật vị trí sticky-header dựa trên chiều cao thực tế
+        function updateStickyHeaderPosition() {
+            const stickyHeaders = document.querySelectorAll('.sticky-header');
+            const debtorSections = document.querySelectorAll('.debtor-section');
+            const quickNavHeight = getQuickNavHeight();
+            
+            if (quickNavHeight > 0) {
+                // Thêm một chút padding để không bị sát
+                const topValue = quickNavHeight + 5;
+                const scrollMarginTop = quickNavHeight + 60; // Thêm chiều cao sticky-header
+                
+                stickyHeaders.forEach(header => {
+                    header.style.top = topValue + 'px';
+                });
+                
+                // Cập nhật scroll-margin-top cho debtor-section
+                debtorSections.forEach(section => {
+                    section.style.scrollMarginTop = scrollMarginTop + 'px';
+                });
+            }
+        }
+
+        // Toggle thanh điều hướng trên mobile
+        function toggleQuickNav() {
+            // Chỉ hoạt động trên mobile (< 768px)
+            if (window.innerWidth >= 768) return;
+            
+            const content = document.getElementById('quickNavContent');
+            const toggle = document.getElementById('quickNavToggle');
+            
+            if (content && toggle) {
+                const isExpanded = content.classList.contains('expanded');
+                
+                if (isExpanded) {
+                    content.classList.remove('expanded');
+                    toggle.classList.remove('rotated');
+                } else {
+                    content.classList.add('expanded');
+                    toggle.classList.add('rotated');
+                }
+                
+                // Đợi một chút để transition hoàn tất rồi mới đo chiều cao
+                setTimeout(function() {
+                    updateStickyHeaderPosition();
+                }, 350); // Đợi transition 0.3s + một chút buffer
+            }
+        }
+
+        // Hàm scroll đến phần nợ của người dùng
+        function scrollToDebtor(debtorId) {
+            const element = document.getElementById(debtorId);
+            if (element) {
+                // Highlight nút được click
+                document.querySelectorAll('.quick-nav-btn').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                const clickedBtn = document.querySelector(`[data-debtor-id="${debtorId}"]`);
+                if (clickedBtn) {
+                    clickedBtn.classList.add('active');
+                }
+                
+                // Trên mobile, tự động mở thanh điều hướng nếu đang đóng
+                if (window.innerWidth < 768) {
+                    const content = document.getElementById('quickNavContent');
+                    const toggle = document.getElementById('quickNavToggle');
+                    if (content && !content.classList.contains('expanded')) {
+                        content.classList.add('expanded');
+                        if (toggle) toggle.classList.add('rotated');
+                        // Đợi transition hoàn tất rồi điều chỉnh sticky-header
+                        setTimeout(function() {
+                            updateStickyHeaderPosition();
+                        }, 350);
+                    }
+                }
+                
+                // Scroll smooth đến element
+                element.scrollIntoView({ 
+                    behavior: 'smooth', 
+                    block: 'start' 
+                });
+            }
+        }
+
+        // Highlight nút active khi scroll
+        (function() {
+            const debtorSections = document.querySelectorAll('.debtor-section');
+            const navButtons = document.querySelectorAll('.quick-nav-btn');
+            
+            if (debtorSections.length === 0 || navButtons.length === 0) return;
+            
+            // Throttle function để tối ưu performance
+            let ticking = false;
+            
+            function updateActiveNav() {
+                const scrollPosition = window.scrollY + 150; // Offset để tính toán chính xác hơn
+                
+                let currentActive = null;
+                debtorSections.forEach(section => {
+                    const rect = section.getBoundingClientRect();
+                    const sectionTop = rect.top + window.scrollY;
+                    const sectionBottom = sectionTop + rect.height;
+                    
+                    if (scrollPosition >= sectionTop && scrollPosition < sectionBottom) {
+                        currentActive = section.id;
+                    }
+                });
+                
+                // Update active state
+                navButtons.forEach(btn => {
+                    const debtorId = btn.getAttribute('data-debtor-id');
+                    if (debtorId === currentActive) {
+                        btn.classList.add('active');
+                    } else {
+                        btn.classList.remove('active');
+                    }
+                });
+                
+                ticking = false;
+            }
+            
+            window.addEventListener('scroll', function() {
+                if (!ticking) {
+                    window.requestAnimationFrame(updateActiveNav);
+                    ticking = true;
+                }
+            });
+            
+            // Update ngay khi trang load
+            updateActiveNav();
+        })();
+
+        // Tự động mở thanh điều hướng trên desktop khi trang load
+        (function() {
+            function initQuickNav() {
+                const content = document.getElementById('quickNavContent');
+                if (content && window.innerWidth >= 768) {
+                    content.classList.add('expanded');
+                }
+                // Đợi một chút để DOM render xong rồi mới đo chiều cao
+                setTimeout(function() {
+                    updateStickyHeaderPosition();
+                }, 100);
+            }
+            
+            // Chạy ngay khi DOM ready
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', function() {
+                    initQuickNav();
+                    // Cập nhật lại sau khi transition hoàn tất
+                    setTimeout(updateStickyHeaderPosition, 500);
+                });
+            } else {
+                initQuickNav();
+                setTimeout(updateStickyHeaderPosition, 500);
+            }
+            
+            // Xử lý khi resize window
+            let resizeTimer;
+            window.addEventListener('resize', function() {
+                clearTimeout(resizeTimer);
+                resizeTimer = setTimeout(function() {
+                    const content = document.getElementById('quickNavContent');
+                    const toggle = document.getElementById('quickNavToggle');
+                    if (content && toggle) {
+                        if (window.innerWidth >= 768) {
+                            // Desktop: luôn mở
+                            content.classList.add('expanded');
+                            toggle.classList.add('rotated');
+                        } else {
+                            // Mobile: đóng mặc định
+                            content.classList.remove('expanded');
+                            toggle.classList.remove('rotated');
+                        }
+                    }
+                    // Đợi một chút để layout ổn định rồi mới đo chiều cao
+                    setTimeout(updateStickyHeaderPosition, 100);
+                }, 250);
+            });
+            
+            // Cập nhật khi có thay đổi về nội dung (ví dụ khi có nhiều nút hơn)
+            const observer = new MutationObserver(function() {
+                setTimeout(updateStickyHeaderPosition, 100);
+            });
+            
+            const quickNavBar = document.querySelector('.quick-nav-bar');
+            if (quickNavBar) {
+                observer.observe(quickNavBar, {
+                    childList: true,
+                    subtree: true,
+                    attributes: true,
+                    attributeFilter: ['class']
+                });
+            }
+        })();
+
         // Phát hiện thiết bị (Android/iOS)
         function detectDevice() {
             const userAgent = navigator.userAgent || navigator.vendor || window.opera;
