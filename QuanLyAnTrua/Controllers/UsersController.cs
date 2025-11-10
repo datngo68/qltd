@@ -91,7 +91,7 @@ namespace QuanLyAnTrua.Controllers
         // POST: Users/Create
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create([Bind("Name,IsActive,Role,BankName,BankAccount,AccountHolderName")] User user, string Username, string Password, int? GroupId)
+        public async Task<IActionResult> Create([Bind("Name,IsActive,Role,BankName,BankAccount,AccountHolderName,TelegramUserId")] User user, string Username, string Password, int? GroupId)
         {
             var isSuperAdmin = SessionHelper.IsSuperAdmin(HttpContext);
             var isAdmin = SessionHelper.IsAdmin(HttpContext);
@@ -322,7 +322,7 @@ namespace QuanLyAnTrua.Controllers
         // POST: Users/Edit/5
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, [Bind("Id,Name,IsActive,CreatedAt,BankName,BankAccount,AccountHolderName")] User user, string? Username, string? NewPassword, int? GroupId, string? Role)
+        public async Task<IActionResult> Edit(int id, [Bind("Id,Name,IsActive,CreatedAt,BankName,BankAccount,AccountHolderName,TelegramUserId")] User user, string? Username, string? NewPassword, int? GroupId, string? Role)
         {
             if (id != user.Id)
             {
@@ -413,6 +413,7 @@ namespace QuanLyAnTrua.Controllers
                     existingUser.BankName = user.BankName;
                     existingUser.BankAccount = user.BankAccount;
                     existingUser.AccountHolderName = user.AccountHolderName;
+                    existingUser.TelegramUserId = user.TelegramUserId;
 
                     // Admin/SuperAdmin có thể cập nhật username (đã xử lý ở trên)
                     // Role đã được cập nhật ở trên (nếu hợp lệ)

@@ -167,7 +167,7 @@ namespace QuanLyAnTrua.Controllers
         // POST: Account/Profile
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Profile(int id, [Bind("Id,Name,BankName,BankAccount,AccountHolderName")] User user)
+        public async Task<IActionResult> Profile(int id, [Bind("Id,Name,BankName,BankAccount,AccountHolderName,TelegramUserId")] User user)
         {
             if (id != user.Id)
             {
@@ -198,6 +198,9 @@ namespace QuanLyAnTrua.Controllers
                     existingUser.BankName = user.BankName;
                     existingUser.BankAccount = user.BankAccount;
                     existingUser.AccountHolderName = user.AccountHolderName;
+                    
+                    // Cập nhật Telegram User ID
+                    existingUser.TelegramUserId = user.TelegramUserId;
 
                     _context.Update(existingUser);
                     await _context.SaveChangesAsync();
@@ -233,6 +236,7 @@ namespace QuanLyAnTrua.Controllers
             userToView.BankName = user.BankName;
             userToView.BankAccount = user.BankAccount;
             userToView.AccountHolderName = user.AccountHolderName;
+            userToView.TelegramUserId = user.TelegramUserId;
 
             // Load danh sách ngân hàng
             ViewBag.Banks = Helpers.QRCodeHelper.GetSupportedBanks().OrderBy(b => b.Name).ToList();

@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using QuanLyAnTrua.Data;
@@ -29,8 +30,20 @@ builder.Host.UseSerilog();
 // Khởi tạo IdEncoderHelper với prefix từ configuration
 IdEncoderHelper.Initialize(builder.Configuration);
 
+// Khởi tạo TelegramHelper với bot token từ configuration
+TelegramHelper.Initialize(builder.Configuration);
+
 // Add services to the container.
 builder.Services.AddControllersWithViews();
+
+// Cấu hình ForwardedHeaders để hoạt động với reverse proxy (nginx, IIS, etc.)
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    // Trust all proxies - trong production nên chỉ định IP cụ thể
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 
 // Add session
 builder.Services.AddDistributedMemoryCache();
@@ -40,7 +53,10 @@ builder.Services.AddSession(options =>
     options.Cookie.HttpOnly = true;
     options.Cookie.IsEssential = true;
     options.Cookie.SameSite = SameSiteMode.Lax;
-    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+    // Trong production với HTTPS, dùng Always. Với reverse proxy, dùng SameAsRequest
+    options.Cookie.SecurePolicy = builder.Environment.IsDevelopment()
+        ? CookieSecurePolicy.SameAsRequest
+        : CookieSecurePolicy.Always;
     options.Cookie.Name = ".QuanLyAnTrua.Session";
     options.Cookie.MaxAge = TimeSpan.FromDays(30); // Cookie tồn tại 30 ngày
 });
@@ -109,6 +125,9 @@ using (var scope = app.Services.CreateScope())
 }
 
 // Configure the HTTP request pipeline.
+// Sử dụng ForwardedHeaders trước các middleware khác
+app.UseForwardedHeaders();
+
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Home/Error");
@@ -116,7 +135,18 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
-app.UseHttpsRedirection();
+// Chỉ dùng HTTPS redirection trong development hoặc khi không có reverse proxy
+// Trong production với reverse proxy (nginx), reverse proxy sẽ xử lý HTTPS
+if (app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
+else
+{
+    // Trong production, nếu reverse proxy đã xử lý HTTPS, không cần redirect
+    // Nếu cần redirect, cấu hình trong reverse proxy thay vì ở đây
+}
+
 app.UseStaticFiles();
 
 app.UseRouting();

@@ -38,6 +38,9 @@ namespace QuanLyAnTrua.Models
         [Display(Name = "Tên chủ tài khoản")]
         public string? AccountHolderName { get; set; }
 
+        [Display(Name = "Telegram User ID")]
+        public string? TelegramUserId { get; set; }
+
         // Navigation properties
         [ForeignKey("GroupId")]
         public virtual Group? Group { get; set; }

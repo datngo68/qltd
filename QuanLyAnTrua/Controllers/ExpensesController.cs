@@ -5,6 +5,7 @@ using QuanLyAnTrua.Data;
 using QuanLyAnTrua.Helpers;
 using QuanLyAnTrua.Models;
 using QuanLyAnTrua.Models.ViewModels;
+using Serilog;
 
 namespace QuanLyAnTrua.Controllers
 {
@@ -239,6 +240,14 @@ namespace QuanLyAnTrua.Controllers
                 }
 
                 await _context.SaveChangesAsync();
+
+                // Gửi nhắc Telegram nếu được yêu cầu
+                var sendTelegram = Request.Form["SendTelegram"].ToString() == "true";
+                if (sendTelegram)
+                {
+                    await SendTelegramNotificationsAsync(expense, viewModel.ParticipantIds ?? new List<int>());
+                }
+
                 TempData["SuccessMessage"] = "Thêm chi phí thành công!";
                 return RedirectToAction(nameof(Index));
             }
@@ -549,6 +558,156 @@ namespace QuanLyAnTrua.Controllers
         private bool ExpenseExists(int id)
         {
             return _context.Expenses.Any(e => e.Id == id);
+        }
+
+        /// <summary>
+        /// Escape các ký tự đặc biệt trong Markdown để tránh lỗi parsing
+        /// Chỉ escape trong text content, không escape trong format tags
+        /// </summary>
+        private string EscapeMarkdown(string text)
+        {
+            if (string.IsNullOrEmpty(text))
+                return text;
+
+            // Escape các ký tự đặc biệt trong Markdown (Markdown cũ)
+            // Lưu ý: Không escape * và _ nếu chúng được dùng cho bold/italic
+            // Chỉ escape các ký tự có thể gây conflict với link format [text](url)
+            return text
+                .Replace("[", "\\[")
+                .Replace("]", "\\]")
+                .Replace("(", "\\(")
+                .Replace(")", "\\)")
+                .Replace("~", "\\~")
+                .Replace("`", "\\`")
+                .Replace(">", "\\>")
+                .Replace("#", "\\#")
+                .Replace("+", "\\+")
+                .Replace("-", "\\-")
+                .Replace("=", "\\=")
+                .Replace("|", "\\|")
+                .Replace("{", "\\{")
+                .Replace("}", "\\}")
+                .Replace(".", "\\.")
+                .Replace("!", "\\!");
+        }
+
+        /// <summary>
+        /// Gửi thông báo Telegram cho các participants khi có expense mới
+        /// </summary>
+        private async Task SendTelegramNotificationsAsync(Expense expense, List<int> participantIds)
+        {
+            try
+            {
+                var payer = await _context.Users.FindAsync(expense.PayerId);
+                if (payer == null) return;
+
+                // Lấy GroupId từ expense
+                if (!expense.GroupId.HasValue)
+                {
+                    Log.Warning("Expense {ExpenseId} không có GroupId, không thể tạo link Group", expense.Id);
+                    return;
+                }
+
+                var participants = await _context.Users
+                    .Where(u => participantIds.Contains(u.Id) && !string.IsNullOrEmpty(u.TelegramUserId))
+                    .ToListAsync();
+
+                if (!participants.Any())
+                {
+                    Log.Information("Không có participant nào có TelegramUserId cho expense {ExpenseId}", expense.Id);
+                    return;
+                }
+
+                var expenseDate = expense.ExpenseDate.ToString("dd/MM/yyyy");
+                var amountPerPerson = participantIds.Count > 0 ? Math.Round(expense.Amount / participantIds.Count, 2) : 0;
+                var description = string.IsNullOrEmpty(expense.Description) ? "Không có mô tả" : expense.Description;
+
+                // Tạo hoặc lấy SharedReport cho Group (tất cả participants dùng chung 1 link)
+                var sharedReport = await _context.SharedReports
+                    .Where(sr => sr.ReportType == "Group"
+                        && sr.GroupId == expense.GroupId.Value
+                        && sr.IsActive)
+                    .OrderByDescending(sr => sr.CreatedAt)
+                    .FirstOrDefaultAsync();
+
+                string publicViewUrl;
+                if (sharedReport != null && (!sharedReport.ExpiresAt.HasValue || sharedReport.ExpiresAt.Value > DateTime.Now))
+                {
+                    // Sử dụng link hiện có
+                    publicViewUrl = Url.Action("PublicView", "Reports", new { token = sharedReport.Token }, Request.Scheme)!;
+                }
+                else
+                {
+                    // Tạo link mới cho Group
+                    string token;
+                    do
+                    {
+                        token = TokenHelper.GenerateSecureToken(32);
+                    } while (await _context.SharedReports.AnyAsync(sr => sr.Token == token));
+
+                    var newSharedReport = new SharedReport
+                    {
+                        Token = token,
+                        ReportType = "Group",
+                        GroupId = expense.GroupId.Value,
+                        CreatedBy = expense.PayerId,
+                        CreatedAt = DateTime.Now,
+                        ExpiresAt = DateTime.Now.AddMonths(3), // Hết hạn sau 3 tháng
+                        IsActive = true
+                    };
+
+                    _context.Add(newSharedReport);
+                    await _context.SaveChangesAsync();
+
+                    publicViewUrl = Url.Action("PublicView", "Reports", new { token = token }, Request.Scheme)!;
+                }
+
+                // Gửi message cho từng participant
+                foreach (var participant in participants)
+                {
+                    // Bỏ qua nếu participant là payer (không cần gửi thông báo)
+                    if (participant.Id == expense.PayerId) continue;
+
+                    try
+                    {
+                        // Tạo message với URL trực tiếp (không dùng parse mode)
+                        // Telegram sẽ tự động detect URL và làm cho nó clickable
+                        var message = $"💰 Thông báo chi phí mới\n\n" +
+                                     $"📅 Ngày: {expenseDate}\n" +
+                                     $"💵 Số tiền: {expense.Amount:N0} đ\n" +
+                                     $"👤 Người chi: {payer.Name}\n" +
+                                     $"📝 Mô tả: {description}\n\n" +
+                                     $"Bạn cần thanh toán: {amountPerPerson:N0} đ\n\n" +
+                                     $"🔗 Xem chi tiết và thanh toán:\n{publicViewUrl}";
+
+                        // Log URL để debug
+                        Log.Information("Gửi Telegram message với URL: {Url} cho user {UserId}", publicViewUrl, participant.Id);
+
+                        // Gửi message không dùng parse mode để Telegram tự động detect URL
+                        // Hoặc có thể dùng Markdown nếu muốn giữ format bold
+                        var sent = await TelegramHelper.SendMessageAsync(participant.TelegramUserId!, message, null);
+                        if (sent)
+                        {
+                            Log.Information("Đã gửi Telegram notification cho user {UserId} ({UserName}) về expense {ExpenseId}",
+                                participant.Id, participant.Name, expense.Id);
+                        }
+                        else
+                        {
+                            Log.Warning("Không thể gửi Telegram notification cho user {UserId} về expense {ExpenseId}",
+                                participant.Id, expense.Id);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "Lỗi khi gửi Telegram notification cho user {UserId} về expense {ExpenseId}",
+                            participant.Id, expense.Id);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Lỗi khi gửi Telegram notifications cho expense {ExpenseId}", expense.Id);
+            }
         }
 
         // GET: Expenses/Delete/5
