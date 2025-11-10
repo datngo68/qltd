@@ -10,6 +10,7 @@ using QuestPDF.Infrastructure;
 using ClosedXML.Excel;
 using System.Text;
 using IHostingEnvironment = Microsoft.AspNetCore.Hosting.IHostingEnvironment;
+using Serilog;
 
 namespace QuanLyAnTrua.Controllers
 {
@@ -492,6 +493,24 @@ namespace QuanLyAnTrua.Controllers
             var currentYear = DateTime.Now.Year;
             var currentMonth = DateTime.Now.Month;
 
+            // Kiểm tra xem đã có payment pending cho cùng userId + creditorId + tháng/năm chưa
+            var existingPendingPayment = await _context.MonthlyPayments
+                .FirstOrDefaultAsync(mp =>
+                    mp.UserId == userId &&
+                    mp.CreditorId == creditorId &&
+                    mp.Year == currentYear &&
+                    mp.Month == currentMonth &&
+                    mp.Status == "Pending");
+
+            if (existingPendingPayment != null)
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = $"Bạn đã có một yêu cầu thanh toán đang chờ xác nhận cho {creditor.Name}. Vui lòng chờ xác nhận hoặc liên hệ admin để hủy yêu cầu cũ."
+                });
+            }
+
             // Làm tròn số tiền lên (round up) để khớp với số tiền trong QR code
             var roundedAmount = Math.Ceiling(amount);
 
@@ -532,6 +551,45 @@ namespace QuanLyAnTrua.Controllers
 
             _context.Add(monthlyPayment);
             await _context.SaveChangesAsync();
+
+            // Gửi thông báo Telegram cho người được trả tiền (creditor)
+            try
+            {
+                if (!string.IsNullOrEmpty(creditor.TelegramUserId))
+                {
+                    var message = $"💳 Thông báo thanh toán mới\n\n" +
+                                 $"👤 Người thanh toán: {user.Name}\n" +
+                                 $"💵 Số tiền: {roundedAmount:N0} đ\n" +
+                                 $"📅 Ngày: {DateTime.Now:dd/MM/yyyy HH:mm}\n" +
+                                 $"📝 Ghi chú: {string.Join(" | ", paymentNotes)}\n\n" +
+                                 $"⏳ Trạng thái: Chờ xác nhận\n\n" +
+                                 $"Vui lòng kiểm tra và xác nhận thanh toán này trong hệ thống.";
+
+                    var sent = await TelegramHelper.SendMessageAsync(creditor.TelegramUserId, message, null);
+                    if (sent)
+                    {
+                        Log.Information("Đã gửi Telegram notification cho creditor {CreditorId} ({CreditorName}) về payment {PaymentId} từ user {UserId} ({UserName})",
+                            creditor.Id, creditor.Name, monthlyPayment.Id, user.Id, user.Name);
+                    }
+                    else
+                    {
+                        Log.Warning("Không thể gửi Telegram notification cho creditor {CreditorId} về payment {PaymentId}",
+                            creditor.Id, monthlyPayment.Id);
+                    }
+                }
+                else
+                {
+                    Log.Information("Creditor {CreditorId} ({CreditorName}) chưa có TelegramUserId, bỏ qua gửi thông báo",
+                        creditor.Id, creditor.Name);
+                }
+            }
+            catch (Exception ex)
+            {
+                // Không throw exception để không ảnh hưởng đến response cho user
+                // Chỉ log lỗi
+                Log.Error(ex, "Lỗi khi gửi Telegram notification cho creditor {CreditorId} về payment {PaymentId}",
+                    creditor.Id, monthlyPayment.Id);
+            }
 
             return Json(new { success = true, message = "Đã gửi yêu cầu thanh toán. Vui lòng chờ xác nhận.", paymentId = monthlyPayment.Id });
         }
