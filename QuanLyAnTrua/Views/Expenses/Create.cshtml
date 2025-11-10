@@ -97,6 +97,18 @@
                 <span asp-validation-for="ParticipantIds" class="text-danger"></span>
             </div>
 
+            <div class="mb-3">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="SendTelegram" value="true" id="sendTelegram" />
+                    <label class="form-check-label" for="sendTelegram">
+                        <i class="bi bi-send"></i> Gửi nhắc Telegram cho những người trong danh sách ăn
+                    </label>
+                </div>
+                <small class="text-muted d-block mt-1">
+                    <i class="bi bi-info-circle"></i> Chỉ gửi cho những người đã cập nhật Telegram User ID trong thông tin cá nhân
+                </small>
+            </div>
+
             <div class="mb-3 d-flex flex-column flex-md-row gap-2">
                 <button type="submit" class="btn btn-primary w-100 w-md-auto">Thêm</button>
                 <a asp-action="Index" class="btn btn-secondary w-100 w-md-auto">Quay lại</a>

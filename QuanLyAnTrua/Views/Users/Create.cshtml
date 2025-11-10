@@ -143,6 +143,16 @@
                 <input asp-for="AccountHolderName" class="form-control" />
                 <span asp-validation-for="AccountHolderName" class="text-danger"></span>
             </div>
+            <hr />
+            <h5><i class="bi bi-telegram"></i> Thông tin Telegram</h5>
+            <div class="mb-3">
+                <label asp-for="TelegramUserId" class="form-label">
+                    <i class="bi bi-chat-dots"></i> Telegram User ID
+                </label>
+                <input asp-for="TelegramUserId" class="form-control" placeholder="Nhập Telegram User ID (ví dụ: 123456789)" />
+                <span asp-validation-for="TelegramUserId" class="text-danger"></span>
+                <small class="text-muted">Để nhận thông báo qua Telegram khi có chi phí mới. Lấy User ID từ <a href="https://t.me/userinfobot" target="_blank">@@userinfobot</a> trên Telegram</small>
+            </div>
             <div class="mb-3 d-flex flex-column flex-md-row gap-2">
                 <button type="submit" class="btn btn-primary w-100 w-md-auto">Thêm</button>
                 <a asp-action="Index" class="btn btn-secondary w-100 w-md-auto">Quay lại</a>
