@@ -622,11 +622,17 @@ namespace QuanLyAnTrua.Controllers
                 var amountPerPerson = participantIds.Count > 0 ? Math.Round(expense.Amount / participantIds.Count, 2) : 0;
                 var description = string.IsNullOrEmpty(expense.Description) ? "Không có mô tả" : expense.Description;
 
-                // Tạo hoặc lấy SharedReport cho Group (tất cả participants dùng chung 1 link)
+                // Tạo hoặc lấy SharedReport cho Group theo tháng/năm của chi phí
+                // Tìm SharedReport được tạo trong cùng tháng/năm với expense
+                var expenseYear = expense.ExpenseDate.Year;
+                var expenseMonth = expense.ExpenseDate.Month;
+
                 var sharedReport = await _context.SharedReports
                     .Where(sr => sr.ReportType == "Group"
                         && sr.GroupId == expense.GroupId.Value
-                        && sr.IsActive)
+                        && sr.IsActive
+                        && sr.CreatedAt.Year == expenseYear
+                        && sr.CreatedAt.Month == expenseMonth)
                     .OrderByDescending(sr => sr.CreatedAt)
                     .FirstOrDefaultAsync();
 

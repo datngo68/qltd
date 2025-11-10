@@ -436,7 +436,12 @@ namespace QuanLyAnTrua.Controllers
                 groupId = sharedReport.GroupId.Value;
             }
 
-            var report = await GetMonthlyReportAsync(DateTime.Now.Year, DateTime.Now.Month, userId, groupId);
+            // Lấy tháng/năm từ SharedReport (tháng mà report được tạo)
+            var reportYear = sharedReport.CreatedAt.Year;
+            var reportMonth = sharedReport.CreatedAt.Month;
+
+            // Sử dụng method riêng cho PublicView: chi phí chỉ trong tháng, nợ từ tất cả các tháng
+            var report = await GetPublicViewReportAsync(reportYear, reportMonth, userId, groupId);
 
             ViewBag.Token = token;
             ViewBag.ReportType = sharedReport.ReportType;
@@ -1189,6 +1194,256 @@ namespace QuanLyAnTrua.Controllers
                 UserDebts = userDebts,
                 Expenses = expenseDetails,
                 CreditorSummaries = creditorSummaries,
+                CurrentUserId = userId
+            };
+        }
+
+        /// <summary>
+        /// Lấy báo cáo cho PublicView: chi phí chỉ trong tháng, nợ và thanh toán từ tất cả các tháng
+        /// </summary>
+        private async Task<MonthlyReportViewModel> GetPublicViewReportAsync(int year, int month, int? userId = null, int? groupId = null)
+        {
+            var startDate = new DateTime(year, month, 1);
+            var endDate = startDate.AddMonths(1).AddDays(-1);
+
+            // CHI PHÍ: Chỉ lấy trong tháng của SharedReport
+            var expenseQuery = _context.Expenses
+                .Include(e => e.Payer)
+                .Include(e => e.Participants)
+                    .ThenInclude(ep => ep.User)
+                .Where(e => e.ExpenseDate >= startDate && e.ExpenseDate <= endDate)
+                .AsQueryable();
+
+            // NỢ: Tính từ TẤT CẢ các chi phí từ trước đến giờ (không giới hạn tháng)
+            var allExpensesForDebtQuery = _context.Expenses
+                .Include(e => e.Payer)
+                .Include(e => e.Participants)
+                    .ThenInclude(ep => ep.User)
+                .AsQueryable();
+
+            // THANH TOÁN: Lấy TẤT CẢ các thanh toán từ trước đến giờ (không giới hạn tháng/năm)
+            var paymentQuery = _context.MonthlyPayments
+                .Include(mp => mp.User)
+                .Where(mp => mp.Status == "Confirmed")
+                .AsQueryable();
+
+            var userQuery = _context.Users.Where(u => u.IsActive).AsQueryable();
+
+            // Filter by userId or groupId
+            if (userId.HasValue)
+            {
+                expenseQuery = expenseQuery.Where(e => e.GroupId.HasValue && e.Participants.Any(p => p.UserId == userId.Value));
+                allExpensesForDebtQuery = allExpensesForDebtQuery.Where(e => e.GroupId.HasValue && e.Participants.Any(p => p.UserId == userId.Value));
+                userQuery = userQuery.Where(u => u.Id == userId.Value);
+                paymentQuery = paymentQuery.Where(mp => mp.UserId == userId.Value);
+            }
+            else if (groupId.HasValue)
+            {
+                expenseQuery = expenseQuery.Where(e => e.GroupId == groupId.Value);
+                allExpensesForDebtQuery = allExpensesForDebtQuery.Where(e => e.GroupId == groupId.Value);
+                userQuery = userQuery.Where(u => u.GroupId == groupId.Value);
+                paymentQuery = paymentQuery.Where(mp => mp.GroupId == groupId.Value);
+            }
+
+            var expenses = await expenseQuery.ToListAsync(); // Chỉ chi phí trong tháng
+            var allExpensesForDebt = await allExpensesForDebtQuery.ToListAsync(); // Tất cả chi phí để tính nợ
+            var users = await userQuery.OrderBy(u => u.Name).ToListAsync();
+            var payments = await paymentQuery.ToListAsync(); // Tất cả thanh toán
+
+            // Calculate user debts từ TẤT CẢ các chi phí (không chỉ trong tháng)
+            var userDebts = new List<UserDebtDetail>();
+            var allDebtDetails = new List<DebtDetail>();
+
+            // BƯỚC 1: Tạo TẤT CẢ các DebtDetail từ tất cả chi phí
+            foreach (var expense in allExpensesForDebt)
+            {
+                var payer = expense.Payer;
+                var participantCount = expense.Participants.Count;
+                var amountPerPerson = participantCount > 0 ? Math.Round(expense.Amount / participantCount, 2) : 0;
+
+                foreach (var participant in expense.Participants)
+                {
+                    if (participant.UserId != payer.Id)
+                    {
+                        var existingDebt = allDebtDetails.FirstOrDefault(d =>
+                            d.DebtorId == participant.UserId &&
+                            d.CreditorId == payer.Id &&
+                            d.ExpenseId == expense.Id);
+
+                        if (existingDebt == null)
+                        {
+                            var debtDetail = new DebtDetail
+                            {
+                                DebtorId = participant.UserId,
+                                DebtorName = participant.User.Name,
+                                CreditorId = payer.Id,
+                                CreditorName = payer.Name,
+                                Amount = amountPerPerson,
+                                RemainingAmount = amountPerPerson,
+                                ExpenseId = expense.Id,
+                                ExpenseDate = expense.ExpenseDate,
+                                Description = expense.Description
+                            };
+                            allDebtDetails.Add(debtDetail);
+                        }
+                    }
+                }
+            }
+
+            // BƯỚC 2: Phân bổ thanh toán cho từng user
+            foreach (var user in users)
+            {
+                var totalAmount = 0m;
+                var paidAsPayer = 0m;
+                var userPayments = payments.Where(p => p.UserId == user.Id).ToList();
+
+                // Tính tổng phải trả từ TẤT CẢ chi phí
+                foreach (var expense in allExpensesForDebt)
+                {
+                    var participantCount = expense.Participants.Count;
+                    if (participantCount > 0 && expense.Participants.Any(ep => ep.UserId == user.Id))
+                    {
+                        totalAmount += Math.Round(expense.Amount / participantCount, 2);
+                    }
+                }
+
+                // Tính tổng đã chi từ TẤT CẢ chi phí
+                paidAsPayer = allExpensesForDebt.Where(e => e.PayerId == user.Id).Sum(e => e.Amount);
+
+                var userDebtDetails = allDebtDetails
+                    .Where(d => d.DebtorId == user.Id)
+                    .OrderBy(d => d.ExpenseDate)
+                    .ThenBy(d => d.ExpenseId)
+                    .ToList();
+
+                var paidAmount = userPayments.Sum(p => p.PaidAmount);
+
+                // Phân bổ thanh toán
+                foreach (var payment in userPayments.OrderBy(p => p.PaidDate))
+                {
+                    if (payment.CreditorId.HasValue)
+                    {
+                        var targetDebts = userDebtDetails
+                            .Where(d => d.CreditorId == payment.CreditorId.Value && d.RemainingAmount > 0)
+                            .OrderBy(d => d.ExpenseDate)
+                            .ThenBy(d => d.ExpenseId)
+                            .ToList();
+
+                        decimal remainingPayment = payment.PaidAmount;
+                        foreach (var debt in targetDebts)
+                        {
+                            if (remainingPayment <= 0) break;
+                            if (debt.RemainingAmount > 0)
+                            {
+                                var paymentApplied = Math.Min(debt.RemainingAmount, remainingPayment);
+                                debt.RemainingAmount -= paymentApplied;
+                                remainingPayment -= paymentApplied;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        decimal remainingPayment = payment.PaidAmount;
+                        foreach (var debt in userDebtDetails)
+                        {
+                            if (remainingPayment <= 0) break;
+                            if (debt.RemainingAmount > 0)
+                            {
+                                var paymentApplied = Math.Min(debt.RemainingAmount, remainingPayment);
+                                debt.RemainingAmount -= paymentApplied;
+                                remainingPayment -= paymentApplied;
+                            }
+                        }
+                    }
+                }
+
+                if (totalAmount > 0 || paidAmount > 0 || paidAsPayer > 0)
+                {
+                    userDebts.Add(new UserDebtDetail
+                    {
+                        UserId = user.Id,
+                        UserName = user.Name,
+                        TotalAmount = totalAmount,
+                        PaidAmount = paidAmount,
+                        PaidAsPayer = paidAsPayer,
+                        DebtDetails = userDebtDetails,
+                        Payments = userPayments.Select(p => new PaymentDetail
+                        {
+                            Id = p.Id,
+                            PaidAmount = p.PaidAmount,
+                            PaidDate = p.PaidDate,
+                            Notes = p.Notes,
+                            UserId = p.UserId,
+                            UserName = p.User.Name
+                        }).ToList(),
+                        BankName = user.BankName,
+                        BankAccount = user.BankAccount,
+                        AccountHolderName = user.AccountHolderName
+                    });
+                }
+            }
+
+            // Prepare expense details (chỉ chi phí trong tháng)
+            var expenseDetails = expenses.Select(e => new ExpenseDetail
+            {
+                ExpenseDate = e.ExpenseDate,
+                Amount = e.Amount,
+                PayerName = e.Payer.Name,
+                ParticipantNames = e.Participants.Select(p => p.User.Name).ToList(),
+                AmountPerPerson = e.Participants.Count > 0 ? e.Amount / e.Participants.Count : 0,
+                Description = e.Description
+            }).ToList();
+
+            // Tập hợp nợ theo người được nợ
+            var creditorSummaries = new List<CreditorSummary>();
+
+            if (userId.HasValue)
+            {
+                var currentUserDebts = userDebts.FirstOrDefault(u => u.UserId == userId.Value);
+                if (currentUserDebts != null && currentUserDebts.DebtDetails.Any())
+                {
+                    var remainingDebtDetails = currentUserDebts.DebtDetails
+                        .Where(d => d.RemainingAmount > 0)
+                        .ToList();
+
+                    if (remainingDebtDetails.Any())
+                    {
+                        var groupedByCreditor = remainingDebtDetails
+                            .GroupBy(d => d.CreditorId)
+                            .ToList();
+
+                        foreach (var group in groupedByCreditor)
+                        {
+                            var creditorId = group.Key;
+                            var creditor = users.FirstOrDefault(u => u.Id == creditorId);
+                            if (creditor != null)
+                            {
+                                var totalAmount = group.Sum(d => d.RemainingAmount);
+                                creditorSummaries.Add(new CreditorSummary
+                                {
+                                    CreditorId = creditorId,
+                                    CreditorName = creditor.Name,
+                                    TotalAmount = totalAmount,
+                                    DebtDetails = group.ToList(),
+                                    BankName = creditor.BankName,
+                                    BankAccount = creditor.BankAccount,
+                                    AccountHolderName = creditor.AccountHolderName
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+
+            return new MonthlyReportViewModel
+            {
+                Year = year,
+                Month = month,
+                TotalExpenses = expenses.Sum(e => e.Amount), // Chỉ tổng chi phí trong tháng
+                TotalTransactions = expenses.Count, // Chỉ số lượng chi phí trong tháng
+                UserDebts = userDebts, // Nợ từ tất cả các tháng
+                Expenses = expenseDetails, // Chỉ chi phí trong tháng
+                CreditorSummaries = creditorSummaries, // Nợ từ tất cả các tháng
                 CurrentUserId = userId
             };
         }

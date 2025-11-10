@@ -35,6 +35,7 @@
                 <th>@Html.DisplayNameFor(model => model.Name)</th>
                 <th>Tên đăng nhập</th>
                 <th>Tài khoản ngân hàng</th>
+                <th>Telegram</th>
                 <th>@Html.DisplayNameFor(model => model.IsActive)</th>
                 <th>@Html.DisplayNameFor(model => model.CreatedAt)</th>
                 <th>Thao tác</th>
@@ -71,6 +72,24 @@
                         else
                         {
                             <span class="text-muted">-</span>
+                        }
+                    </td>
+                    <td>
+                        @if (!string.IsNullOrEmpty(item.TelegramUserId))
+                        {
+                            <span class="badge bg-success">
+                                <i class="bi bi-check-circle"></i> Đã kết nối
+                            </span>
+                            <br />
+                            <small class="text-muted">ID: @item.TelegramUserId</small>
+                        }
+                        else
+                        {
+                            <span class="badge bg-secondary">
+                                <i class="bi bi-x-circle"></i> Chưa kết nối
+                            </span>
+                            <br />
+                            <small class="text-muted">Dùng lệnh /set trong Telegram</small>
                         }
                     </td>
                     <td>
@@ -125,9 +144,9 @@
                     url: 'https://cdn.datatables.net/plug-ins/1.13.7/i18n/vi.json'
                 },
                 pageLength: 25,
-                order: [[4, 'desc']], // Sắp xếp theo ngày tạo giảm dần
+                order: [[5, 'desc']], // Sắp xếp theo ngày tạo giảm dần
                 columnDefs: [
-                    { orderable: false, targets: 5 } // Tắt sắp xếp cho cột Thao tác
+                    { orderable: false, targets: 6 } // Tắt sắp xếp cho cột Thao tác
                 ]
             });
         });
