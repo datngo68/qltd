@@ -7,135 +7,223 @@
 <h2><i class="bi bi-plus-circle"></i> Thêm chi phí</h2>
 <hr />
 
-<div class="row">
-    <div class="col-12 col-md-6">
-        <form asp-action="Create" method="get" id="filterForm">
-            @if (Context.Session.GetString("Role") == "SuperAdmin" && ViewBag.Groups != null)
-            {
-                <div class="mb-3">
-                    <label class="form-label">Lọc theo nhóm</label>
-                    <select name="groupId" class="form-select" onchange="document.getElementById('filterForm').submit();">
-                        <option value="">-- Tất cả nhóm --</option>
-                        @foreach (var group in (List<QuanLyAnTrua.Models.Group>)ViewBag.Groups)
-                        {
-                            <option value="@group.Id" selected="@(ViewBag.SelectedGroupId != null && ViewBag.SelectedGroupId == group.Id)">
-                                @group.Name
-                            </option>
-                        }
-                    </select>
+@* Filter form cho SuperAdmin *@
+@if (Context.Session.GetString("Role") == "SuperAdmin" && ViewBag.Groups != null)
+{
+    <form asp-action="Create" method="get" id="filterForm" class="mb-3">
+        <div class="row">
+            <div class="col-12 col-md-4 col-lg-3">
+                <label class="form-label">Lọc theo nhóm</label>
+                <select name="groupId" class="form-select" onchange="document.getElementById('filterForm').submit();">
+                    <option value="">-- Tất cả nhóm --</option>
+                    @foreach (var group in (List<QuanLyAnTrua.Models.Group>)ViewBag.Groups)
+                    {
+                        <option value="@group.Id" selected="@(ViewBag.SelectedGroupId != null && ViewBag.SelectedGroupId == group.Id)">
+                            @group.Name
+                        </option>
+                    }
+                </select>
+            </div>
+        </div>
+    </form>
+}
+
+<form asp-action="Create" method="post">
+    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+    @if (Context.Session.GetString("Role") == "SuperAdmin" && ViewBag.SelectedGroupId != null)
+    {
+        <input type="hidden" name="groupId" value="@ViewBag.SelectedGroupId" />
+    }
+
+    <div class="row g-4">
+        @* Cột trái: Form nhập thông tin chi phí *@
+        <div class="col-12 col-lg-5">
+            <div class="card h-100">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-receipt"></i> Thông tin chi phí</h5>
                 </div>
-            }
-        </form>
-        <form asp-action="Create" method="post">
-            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
-            @if (Context.Session.GetString("Role") == "SuperAdmin" && ViewBag.SelectedGroupId != null)
-            {
-                <input type="hidden" name="groupId" value="@ViewBag.SelectedGroupId" />
-            }
-
-            <div class="mb-3">
-                <label asp-for="Amount" class="form-label"></label>
-                <input asp-for="Amount" class="form-control" type="number" step="0.01" min="0.01" />
-                <span asp-validation-for="Amount" class="text-danger"></span>
-            </div>
-
-            <div class="mb-3">
-                <label asp-for="PayerId" class="form-label"></label>
-                @if (Context.Session.GetString("Role") == "User")
-                {
-                    @* User thường chỉ có thể chọn bản thân làm payer *@
-                    var currentUserId = Context.Session.GetInt32("UserId");
-                    var currentUser = Model.AllUsers?.FirstOrDefault(u => u.Id == currentUserId);
-                    <input type="hidden" asp-for="PayerId" value="@currentUserId" />
-                    <input type="text" class="form-control" value="@(currentUser?.Name ?? "Bạn")" readonly />
-                    <small class="text-muted">Bạn chỉ có thể chọn bản thân làm người chi tiền</small>
-                }
-                else
-                {
-                    <select asp-for="PayerId" class="form-select"
-                        asp-items="@(new SelectList(Model.AllUsers ?? new List<QuanLyAnTrua.Models.User>(), "Id", "Name"))">
-                        <option value="">-- Chọn người chi tiền --</option>
-                    </select>
-                }
-                <span asp-validation-for="PayerId" class="text-danger"></span>
-            </div>
-
-            <div class="mb-3">
-                <label asp-for="ExpenseDate" class="form-label"></label>
-                <input asp-for="ExpenseDate" class="form-control" type="date" />
-                <span asp-validation-for="ExpenseDate" class="text-danger"></span>
-            </div>
-
-            <div class="mb-3">
-                <label asp-for="Description" class="form-label"></label>
-                <textarea asp-for="Description" class="form-control" rows="3"></textarea>
-                <span asp-validation-for="Description" class="text-danger"></span>
-            </div>
-
-            <div class="mb-3">
-                <label class="form-label">Người sử dụng <span class="text-danger">*</span></label>
-                
-                @* Tìm kiếm và nút điều khiển *@
-                <div class="mb-2">
-                    <div class="input-group mb-2">
-                        <span class="input-group-text"><i class="bi bi-search"></i></span>
-                        <input type="text" class="form-control" id="userSearchInput" placeholder="Tìm kiếm người dùng..." />
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label asp-for="Amount" class="form-label"></label>
+                        <input asp-for="Amount" class="form-control" type="number" step="0.01" min="0.01" />
+                        <span asp-validation-for="Amount" class="text-danger"></span>
                     </div>
-                    <div class="d-flex gap-2 flex-wrap">
-                        <button type="button" class="btn btn-sm btn-outline-primary" id="selectAllBtn">
-                            <i class="bi bi-check-all"></i> Chọn tất cả
+
+                    <div class="mb-3">
+                        <label asp-for="PayerId" class="form-label"></label>
+                        @if (Context.Session.GetString("Role") == "User")
+                        {
+                            @* User thường chỉ có thể chọn bản thân làm payer *@
+                            var currentUserId = Context.Session.GetInt32("UserId");
+                            var currentUser = Model.AllUsers?.FirstOrDefault(u => u.Id == currentUserId);
+                            <input type="hidden" asp-for="PayerId" value="@currentUserId" />
+                            <input type="text" class="form-control" value="@(currentUser?.Name ?? "Bạn")" readonly />
+                            <small class="text-muted">Bạn chỉ có thể chọn bản thân làm người chi tiền</small>
+                        }
+                        else
+                        {
+                            <select asp-for="PayerId" class="form-select"
+                                asp-items="@(new SelectList(Model.AllUsers ?? new List<QuanLyAnTrua.Models.User>(), "Id", "Name"))">
+                                <option value="">-- Chọn người chi tiền --</option>
+                            </select>
+                        }
+                        <span asp-validation-for="PayerId" class="text-danger"></span>
+                    </div>
+
+                    <div class="mb-3">
+                        <label asp-for="ExpenseDate" class="form-label"></label>
+                        <input asp-for="ExpenseDate" class="form-control" type="date" />
+                        <span asp-validation-for="ExpenseDate" class="text-danger"></span>
+                    </div>
+
+                    <div class="mb-3">
+                        <label asp-for="Description" class="form-label"></label>
+                        <textarea asp-for="Description" class="form-control" rows="4"></textarea>
+                        <span asp-validation-for="Description" class="text-danger"></span>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="SendTelegram" value="true" id="sendTelegram" />
+                            <label class="form-check-label" for="sendTelegram">
+                                <i class="bi bi-send"></i> Gửi nhắc Telegram cho những người trong danh sách ăn
+                            </label>
+                        </div>
+                        <small class="text-muted d-block mt-1">
+                            <i class="bi bi-info-circle"></i> Chỉ gửi cho những người đã cập nhật Telegram User ID trong thông tin cá nhân
+                        </small>
+                    </div>
+
+                    <div class="d-flex flex-column flex-md-row gap-2 mt-auto pt-3">
+                        <button type="submit" class="btn btn-primary w-100 w-md-auto">
+                            <i class="bi bi-check-circle"></i> Thêm chi phí
                         </button>
-                        <button type="button" class="btn btn-sm btn-outline-secondary" id="deselectAllBtn">
-                            <i class="bi bi-x-square"></i> Bỏ chọn tất cả
-                        </button>
-                        <span class="badge bg-info align-self-center ms-auto" id="selectedCount">
-                            Đã chọn: <span id="countNumber">0</span>
+                        <a asp-action="Index" class="btn btn-secondary w-100 w-md-auto">
+                            <i class="bi bi-arrow-left"></i> Quay lại
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* Cột phải: Chọn người dùng *@
+        <div class="col-12 col-lg-7">
+            <div class="card h-100">
+                <div class="card-header participant-header">
+                    <h5 class="mb-0">
+                        <i class="bi bi-people"></i> Người sử dụng <span class="text-danger">*</span>
+                    </h5>
+                </div>
+                <div class="card-body">
+                    @* Phần hiển thị người đã chọn dạng chips *@
+                    <div class="selected-users-section mb-3" id="selectedUsersSection" style="display: none;">
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <span class="text-muted small">
+                                <i class="bi bi-check-circle-fill text-success"></i> Đã chọn (<span id="selectedCountBadge">0</span>):
+                            </span>
+                        </div>
+                        <div class="selected-chips-container d-flex flex-wrap gap-2 p-3 bg-light rounded border" id="selectedChipsContainer">
+                            @* Chips sẽ được thêm bằng JavaScript *@
+                        </div>
+                    </div>
+
+                    @* Toolbar tìm kiếm và điều khiển *@
+                    <div class="participant-controls mb-3">
+                        <div class="row g-2 align-items-end">
+                            <div class="col-12 col-md-8">
+                                <label class="form-label small text-muted mb-1 d-none d-md-block">Tìm kiếm</label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-white">
+                                        <i class="bi bi-search text-muted"></i>
+                                    </span>
+                                    <input type="text" 
+                                           class="form-control border-start-0" 
+                                           id="userSearchInput" 
+                                           placeholder="Tìm kiếm..." />
+                                </div>
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <label class="form-label small text-muted mb-1 d-none d-md-block">&nbsp;</label>
+                                <div class="d-flex gap-1">
+                                    <button type="button" 
+                                            class="btn btn-outline-primary flex-fill" 
+                                            id="selectAllBtn"
+                                            title="Chọn tất cả">
+                                        <i class="bi bi-check-all"></i> <span class="d-none d-md-inline">Tất cả</span>
+                                    </button>
+                                    <button type="button" 
+                                            class="btn btn-outline-secondary flex-fill" 
+                                            id="deselectAllBtn"
+                                            title="Bỏ chọn tất cả">
+                                        <i class="bi bi-x-square"></i> <span class="d-none d-md-inline">Bỏ hết</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    @* Danh sách người dùng *@
+                    <div class="users-list-container border rounded bg-white" id="usersListContainer">
+                        <div class="users-list" id="usersList">
+                            @if (Model.AllUsers != null)
+                            {
+                                @foreach (var user in Model.AllUsers)
+                                {
+                                    var isChecked = Model.ParticipantIds != null && Model.ParticipantIds.Contains(user.Id);
+                                    <div class="user-list-item user-item @(isChecked ? "is-selected" : "")" 
+                                         data-user-id="@user.Id" 
+                                         data-user-name="@user.Name.ToLower()">
+                                        <div class="user-list-item__content">
+                                            <div class="user-avatar-wrapper">
+                                                <div class="user-avatar">
+                                                    <i class="bi bi-person-circle"></i>
+                                                </div>
+                                                @if (isChecked)
+                                                {
+                                                    <div class="check-indicator">
+                                                        <i class="bi bi-check-circle-fill"></i>
+                                                    </div>
+                                                }
+                                            </div>
+                                            <div class="user-info">
+                                                <div class="user-name">@user.Name</div>
+                                            </div>
+                                            <div class="user-action">
+                                                <div class="form-check form-switch">
+                                                    <input class="form-check-input participant-checkbox" 
+                                                           type="checkbox" 
+                                                           name="ParticipantIds" 
+                                                           value="@user.Id" 
+                                                           id="user_@user.Id" 
+                                                           @(isChecked ? "checked" : "") />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            }
+                        </div>
+                        <div class="no-results-message text-center py-5 text-muted" id="noResultsMessage" style="display: none;">
+                            <i class="bi bi-search display-6 d-block mb-2 opacity-50"></i>
+                            <div>Không tìm thấy người dùng nào</div>
+                            <small class="text-muted">Thử tìm kiếm với từ khóa khác</small>
+                        </div>
+                    </div>
+
+                    <div class="mt-2 d-flex align-items-center gap-2 flex-wrap">
+                        <small class="text-muted">
+                            <i class="bi bi-info-circle"></i> Mặc định tất cả người dùng đã được chọn. Bỏ tích những người không ăn.
+                        </small>
+                        <span class="badge bg-primary ms-auto" id="totalUsersBadge">
+                            Tổng: <span id="totalUsersCount">0</span>
                         </span>
                     </div>
+                    <span asp-validation-for="ParticipantIds" class="text-danger"></span>
                 </div>
-
-                @* Danh sách người dùng *@
-                <div class="border p-3 rounded" style="max-height: 300px; overflow-y: auto; background-color: #f8f9fa;" id="usersList">
-                    @if (Model.AllUsers != null)
-                    {
-                        @foreach (var user in Model.AllUsers)
-                        {
-                            var isChecked = Model.ParticipantIds != null && Model.ParticipantIds.Contains(user.Id);
-                            <div class="form-check py-2 user-item" data-user-name="@user.Name.ToLower()">
-                                <input class="form-check-input participant-checkbox" type="checkbox" name="ParticipantIds" value="@user.Id"
-                                    id="user_@user.Id" @(isChecked ? "checked" : "") />
-                                <label class="form-check-label" for="user_@user.Id" style="cursor: pointer; font-size: 0.95rem;">
-                                    <i class="bi bi-person"></i> @user.Name
-                                </label>
-                            </div>
-                        }
-                    }
-                </div>
-                <small class="text-muted d-block mt-2">
-                    <i class="bi bi-info-circle"></i> Mặc định tất cả người dùng đã được chọn. Bỏ tích những người không ăn.
-                </small>
-                <span asp-validation-for="ParticipantIds" class="text-danger"></span>
             </div>
-
-            <div class="mb-3">
-                <div class="form-check">
-                    <input class="form-check-input" type="checkbox" name="SendTelegram" value="true" id="sendTelegram" />
-                    <label class="form-check-label" for="sendTelegram">
-                        <i class="bi bi-send"></i> Gửi nhắc Telegram cho những người trong danh sách ăn
-                    </label>
-                </div>
-                <small class="text-muted d-block mt-1">
-                    <i class="bi bi-info-circle"></i> Chỉ gửi cho những người đã cập nhật Telegram User ID trong thông tin cá nhân
-                </small>
-            </div>
-
-            <div class="mb-3 d-flex flex-column flex-md-row gap-2">
-                <button type="submit" class="btn btn-primary w-100 w-md-auto">Thêm</button>
-                <a asp-action="Index" class="btn btn-secondary w-100 w-md-auto">Quay lại</a>
-            </div>
-        </form>
+        </div>
     </div>
-</div>
+</form>
 
 @section Scripts {
     @{
@@ -146,33 +234,129 @@
             const searchInput = document.getElementById('userSearchInput');
             const selectAllBtn = document.getElementById('selectAllBtn');
             const deselectAllBtn = document.getElementById('deselectAllBtn');
-            const countNumber = document.getElementById('countNumber');
-            const userItems = document.querySelectorAll('.user-item');
-            const checkboxes = document.querySelectorAll('.participant-checkbox');
+            const selectedCountBadge = document.getElementById('selectedCountBadge');
+            const totalUsersCount = document.getElementById('totalUsersCount');
+            const selectedUsersSection = document.getElementById('selectedUsersSection');
+            const selectedChipsContainer = document.getElementById('selectedChipsContainer');
+            const noResultsMessage = document.getElementById('noResultsMessage');
+            const userItems = Array.from(document.querySelectorAll('.user-item'));
+            const checkboxes = Array.from(document.querySelectorAll('.participant-checkbox'));
 
-            // Hàm cập nhật số người đã chọn
-            function updateSelectedCount() {
-                const visibleCheckboxes = Array.from(checkboxes).filter(cb => {
-                    const item = cb.closest('.user-item');
-                    return item && item.style.display !== 'none';
+            // Khởi tạo tổng số người dùng
+            if (totalUsersCount) {
+                totalUsersCount.textContent = userItems.length;
+            }
+
+            // Lấy danh sách người dùng đã chọn
+            function getSelectedUsers() {
+                return userItems
+                    .filter(item => {
+                        const checkbox = item.querySelector('.participant-checkbox');
+                        return checkbox && checkbox.checked;
+                    })
+                    .map(item => ({
+                        id: item.getAttribute('data-user-id'),
+                        name: item.querySelector('.user-name')?.textContent?.trim() || ''
+                    }));
+            }
+
+            // Tạo chip cho người đã chọn
+            function createChip(user) {
+                const chip = document.createElement('div');
+                chip.className = 'selected-chip';
+                chip.setAttribute('data-user-id', user.id);
+                chip.innerHTML = `
+                    <span class="selected-chip__name">${user.name}</span>
+                    <button type="button" class="selected-chip__remove" aria-label="Bỏ chọn">
+                        <i class="bi bi-x"></i>
+                    </button>
+                `;
+                
+                chip.querySelector('.selected-chip__remove').addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    const userId = chip.getAttribute('data-user-id');
+                    const checkbox = document.querySelector(`input[value="${userId}"].participant-checkbox`);
+                    if (checkbox) {
+                        checkbox.checked = false;
+                        checkbox.dispatchEvent(new Event('change'));
+                    }
                 });
-                const checkedCount = visibleCheckboxes.filter(cb => cb.checked).length;
-                countNumber.textContent = checkedCount;
+                
+                return chip;
+            }
+
+            // Cập nhật phần chips người đã chọn
+            function updateSelectedChips() {
+                const selectedUsers = getSelectedUsers();
+                
+                if (selectedChipsContainer) {
+                    selectedChipsContainer.innerHTML = '';
+                    selectedUsers.forEach(user => {
+                        selectedChipsContainer.appendChild(createChip(user));
+                    });
+                }
+                
+                if (selectedUsersSection) {
+                    selectedUsersSection.style.display = selectedUsers.length > 0 ? 'block' : 'none';
+                }
+                
+                if (selectedCountBadge) {
+                    selectedCountBadge.textContent = selectedUsers.length;
+                }
+            }
+
+            // Cập nhật trạng thái của user item
+            function updateUserItemState(item, isSelected) {
+                const checkbox = item.querySelector('.participant-checkbox');
+                const avatarWrapper = item.querySelector('.user-avatar-wrapper');
+                
+                if (isSelected) {
+                    item.classList.add('is-selected');
+                    if (!avatarWrapper.querySelector('.check-indicator')) {
+                        const indicator = document.createElement('div');
+                        indicator.className = 'check-indicator';
+                        indicator.innerHTML = '<i class="bi bi-check-circle-fill"></i>';
+                        avatarWrapper.appendChild(indicator);
+                    }
+                } else {
+                    item.classList.remove('is-selected');
+                    const indicator = avatarWrapper.querySelector('.check-indicator');
+                    if (indicator) {
+                        indicator.remove();
+                    }
+                }
+            }
+
+            // Cập nhật tất cả trạng thái
+            function updateAllStates() {
+                userItems.forEach(item => {
+                    const checkbox = item.querySelector('.participant-checkbox');
+                    if (checkbox) {
+                        updateUserItemState(item, checkbox.checked);
+                    }
+                });
+                updateSelectedChips();
             }
 
             // Tìm kiếm người dùng
             if (searchInput) {
                 searchInput.addEventListener('input', function() {
                     const searchTerm = this.value.toLowerCase().trim();
+                    let visibleCount = 0;
+                    
                     userItems.forEach(item => {
                         const userName = item.getAttribute('data-user-name') || '';
                         if (userName.includes(searchTerm)) {
                             item.style.display = '';
+                            visibleCount++;
                         } else {
                             item.style.display = 'none';
                         }
                     });
-                    updateSelectedCount();
+                    
+                    if (noResultsMessage) {
+                        noResultsMessage.style.display = visibleCount === 0 ? 'block' : 'none';
+                    }
                 });
             }
 
@@ -184,10 +368,11 @@
                             const checkbox = item.querySelector('.participant-checkbox');
                             if (checkbox) {
                                 checkbox.checked = true;
+                                updateUserItemState(item, true);
                             }
                         }
                     });
-                    updateSelectedCount();
+                    updateSelectedChips();
                 });
             }
 
@@ -199,20 +384,499 @@
                             const checkbox = item.querySelector('.participant-checkbox');
                             if (checkbox) {
                                 checkbox.checked = false;
+                                updateUserItemState(item, false);
                             }
                         }
                     });
-                    updateSelectedCount();
+                    updateSelectedChips();
                 });
             }
 
-            // Cập nhật số đếm khi checkbox thay đổi
+            // Xử lý thay đổi checkbox
             checkboxes.forEach(checkbox => {
-                checkbox.addEventListener('change', updateSelectedCount);
+                checkbox.addEventListener('change', function() {
+                    const item = this.closest('.user-item');
+                    if (item) {
+                        updateUserItemState(item, this.checked);
+                        updateSelectedChips();
+                    }
+                });
             });
 
-            // Khởi tạo số đếm ban đầu
-            updateSelectedCount();
+            // Click vào item để toggle checkbox
+            userItems.forEach(item => {
+                item.addEventListener('click', function(e) {
+                    // Không toggle nếu click vào checkbox hoặc nút remove chip
+                    if (e.target.type === 'checkbox' || 
+                        e.target.closest('.form-check-input') ||
+                        e.target.closest('.selected-chip__remove')) {
+                        return;
+                    }
+                    
+                    const checkbox = item.querySelector('.participant-checkbox');
+                    if (checkbox) {
+                        checkbox.checked = !checkbox.checked;
+                        checkbox.dispatchEvent(new Event('change'));
+                    }
+                });
+            });
+
+            // Khởi tạo ban đầu
+            updateAllStates();
         });
     </script>
+
+    <style>
+        /* Card Layout */
+        .card {
+            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+            border: 1px solid rgba(0, 0, 0, 0.125);
+        }
+
+        .card-header {
+            font-weight: 600;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.125);
+        }
+
+        .participant-header {
+            background-color: #f8f9fa;
+            color: #495057;
+            border-bottom: 2px solid #dee2e6;
+        }
+
+        .participant-header h5 {
+            color: #495057;
+        }
+
+        .card-body {
+            display: flex;
+            flex-direction: column;
+        }
+
+        @@media (min-width: 992px) {
+            .card-body {
+                min-height: 500px;
+            }
+
+            .col-lg-5 .card-body {
+                justify-content: flex-start;
+            }
+
+            .col-lg-7 .card-body {
+                justify-content: flex-start;
+            }
+
+            .col-lg-7 .users-list-container {
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+                min-height: 0;
+            }
+        }
+
+        /* Selected Chips Section */
+        .selected-users-section {
+            animation: fadeIn 0.3s ease;
+        }
+
+        .selected-chips-container {
+            min-height: 50px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .selected-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            background-color: #0d6efd;
+            color: white;
+            border-radius: 1.5rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            animation: chipSlideIn 0.3s ease;
+        }
+
+        .selected-chip:hover {
+            background-color: #0b5ed7;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .selected-chip__name {
+            white-space: nowrap;
+        }
+
+        .selected-chip__remove {
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+            padding: 0;
+            width: 18px;
+            height: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: all 0.2s ease;
+            font-size: 0.875rem;
+        }
+
+        .selected-chip__remove:hover {
+            background-color: rgba(255, 255, 255, 0.2);
+            transform: scale(1.1);
+        }
+
+        /* Users List Container */
+        .users-list-container {
+            max-height: 500px;
+            overflow-y: auto;
+            border-radius: 0.5rem;
+        }
+
+        @@media (min-width: 992px) {
+            .users-list-container {
+                max-height: calc(100vh - 450px);
+                min-height: 400px;
+            }
+        }
+
+        .users-list {
+            padding: 0.5rem;
+        }
+
+        /* Desktop: Grid 2 columns */
+        @@media (min-width: 768px) {
+            .users-list {
+                display: grid;
+                grid-template-columns: repeat(2, 1fr);
+                gap: 0.75rem;
+            }
+        }
+
+        /* User List Item */
+        .user-list-item {
+            padding: 0.75rem 1rem;
+            border-radius: 0.5rem;
+            margin-bottom: 0.5rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: 2px solid transparent;
+            background-color: #f8f9fa;
+        }
+
+        @@media (min-width: 768px) {
+            .user-list-item {
+                margin-bottom: 0;
+            }
+        }
+
+        .user-list-item:hover {
+            background-color: #e9ecef;
+            border-color: #dee2e6;
+        }
+
+        @@media (max-width: 767.98px) {
+            .user-list-item:hover {
+                transform: translateX(4px);
+            }
+        }
+
+        @@media (min-width: 768px) {
+            .user-list-item:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            }
+        }
+
+        .user-list-item.is-selected {
+            background-color: rgba(13, 110, 253, 0.1);
+            border-color: #0d6efd;
+        }
+
+        .user-list-item__content {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        /* User Avatar */
+        .user-avatar-wrapper {
+            position: relative;
+            flex-shrink: 0;
+        }
+
+        .user-avatar {
+            width: 48px;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #6c757d;
+            font-size: 2rem;
+        }
+
+        .user-list-item.is-selected .user-avatar {
+            color: #0d6efd;
+        }
+
+        .check-indicator {
+            position: absolute;
+            bottom: -2px;
+            right: -2px;
+            width: 20px;
+            height: 20px;
+            background-color: #0d6efd;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 0.75rem;
+            border: 2px solid white;
+            animation: checkPop 0.3s ease;
+        }
+
+        /* User Info */
+        .user-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .user-name {
+            font-size: 1rem;
+            font-weight: 500;
+            color: #212529;
+            margin: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .user-list-item.is-selected .user-name {
+            color: #0d6efd;
+            font-weight: 600;
+        }
+
+        /* User Action */
+        .user-action {
+            flex-shrink: 0;
+        }
+
+        .user-action .form-check-input {
+            width: 3rem;
+            height: 1.5rem;
+            cursor: pointer;
+        }
+
+        .user-action .form-check-input:checked {
+            background-color: #0d6efd;
+            border-color: #0d6efd;
+        }
+
+        /* No Results Message */
+        .no-results-message {
+            padding: 3rem 1rem;
+        }
+
+        /* Animations */
+        @@keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @@keyframes chipSlideIn {
+            from {
+                opacity: 0;
+                transform: scale(0.8);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        @@keyframes checkPop {
+            0% {
+                transform: scale(0);
+            }
+            50% {
+                transform: scale(1.2);
+            }
+            100% {
+                transform: scale(1);
+            }
+        }
+
+        /* Participant Controls */
+        .participant-controls .input-group {
+            height: 38px;
+        }
+
+        .participant-controls .input-group .form-control {
+            height: 100%;
+        }
+
+        .participant-controls .input-group .input-group-text {
+            height: 100%;
+            display: flex;
+            align-items: center;
+        }
+
+        .participant-controls .btn {
+            height: 38px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Mobile Responsive */
+        @@media (max-width: 767.98px) {
+            .selected-users-section {
+                margin-bottom: 0.75rem;
+            }
+
+            .selected-chips-container {
+                padding: 0.5rem !important;
+                gap: 0.5rem !important;
+                max-height: 150px;
+            }
+
+            .participant-controls {
+                margin-bottom: 0.75rem;
+            }
+
+            .participant-controls .row {
+                margin: 0;
+            }
+
+            .participant-controls .input-group {
+                height: auto;
+                margin-bottom: 0.5rem;
+            }
+
+            .participant-controls .btn {
+                height: auto;
+                font-size: 0.8125rem;
+                padding: 0.375rem 0.5rem;
+            }
+
+            .users-list-container {
+                max-height: 400px;
+            }
+
+            .user-list-item {
+                padding: 0.625rem 0.75rem;
+            }
+
+            .user-list-item__content {
+                gap: 0.75rem;
+            }
+
+            .user-avatar {
+                width: 40px;
+                height: 40px;
+                font-size: 1.75rem;
+            }
+
+            .user-name {
+                font-size: 0.9375rem;
+            }
+
+            .user-action .form-check-input {
+                width: 2.5rem;
+                height: 1.25rem;
+            }
+
+            .selected-chip {
+                font-size: 0.8125rem;
+                padding: 0.4375rem 0.625rem;
+            }
+        }
+
+        @@media (max-width: 575.98px) {
+            .selected-chips-container {
+                padding: 0.375rem !important;
+                gap: 0.375rem !important;
+                max-height: 120px;
+            }
+
+            .selected-chip {
+                font-size: 0.75rem;
+                padding: 0.375rem 0.5rem;
+            }
+
+            .participant-controls {
+                margin-bottom: 0.5rem;
+            }
+
+            .participant-controls .input-group {
+                height: auto;
+                margin-bottom: 0.375rem;
+            }
+
+            .participant-controls .btn {
+                height: auto;
+                font-size: 0.75rem;
+                padding: 0.25rem 0.375rem;
+                min-width: auto;
+            }
+
+            .users-list-container {
+                max-height: 350px;
+            }
+
+            .user-list-item {
+                padding: 0.5rem;
+            }
+
+            .user-avatar {
+                width: 36px;
+                height: 36px;
+                font-size: 1.5rem;
+            }
+
+            .user-name {
+                font-size: 0.875rem;
+            }
+
+            .check-indicator {
+                width: 18px;
+                height: 18px;
+                font-size: 0.625rem;
+            }
+        }
+
+        /* Scrollbar Styling */
+        .users-list-container::-webkit-scrollbar,
+        .selected-chips-container::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .users-list-container::-webkit-scrollbar-track,
+        .selected-chips-container::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+
+        .users-list-container::-webkit-scrollbar-thumb,
+        .selected-chips-container::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 4px;
+        }
+
+        .users-list-container::-webkit-scrollbar-thumb:hover,
+        .selected-chips-container::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
+    </style>
 }
