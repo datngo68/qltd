@@ -211,7 +211,7 @@ namespace QuanLyAnTrua.Controllers
                     var missingAmounts = viewModel.ParticipantIds
                         .Where(id => !viewModel.ParticipantAmounts.ContainsKey(id) || viewModel.ParticipantAmounts[id] <= 0)
                         .ToList();
-                    
+
                     if (missingAmounts.Any())
                     {
                         ModelState.AddModelError("ParticipantAmounts", "Vui lòng nhập số tiền cho tất cả người tham gia");
@@ -290,8 +290,8 @@ namespace QuanLyAnTrua.Controllers
                             UserId = participantId,
                             // Nếu SplitType = Custom và có Amount trong ParticipantAmounts thì dùng giá trị đó
                             // Nếu SplitType = Equal hoặc không có Amount thì để null (chia đều)
-                            Amount = viewModel.SplitType == SplitType.Custom && 
-                                     viewModel.ParticipantAmounts != null && 
+                            Amount = viewModel.SplitType == SplitType.Custom &&
+                                     viewModel.ParticipantAmounts != null &&
                                      viewModel.ParticipantAmounts.ContainsKey(participantId)
                                 ? viewModel.ParticipantAmounts[participantId]
                                 : null
@@ -443,7 +443,7 @@ namespace QuanLyAnTrua.Controllers
             // Xác định SplitType: nếu tất cả participants đều có Amount = null thì là Equal, ngược lại là Custom
             var hasCustomAmounts = expense.Participants.Any(p => p.Amount.HasValue);
             var participantAmounts = new Dictionary<int, decimal>();
-            
+
             if (hasCustomAmounts)
             {
                 foreach (var participant in expense.Participants)
@@ -520,7 +520,7 @@ namespace QuanLyAnTrua.Controllers
                     var missingAmounts = viewModel.ParticipantIds
                         .Where(id => !viewModel.ParticipantAmounts.ContainsKey(id) || viewModel.ParticipantAmounts[id] <= 0)
                         .ToList();
-                    
+
                     if (missingAmounts.Any())
                     {
                         ModelState.AddModelError("ParticipantAmounts", "Vui lòng nhập số tiền cho tất cả người tham gia");
@@ -610,12 +610,12 @@ namespace QuanLyAnTrua.Controllers
                     foreach (var participantId in newParticipantIds)
                     {
                         var existingParticipant = expense.Participants.FirstOrDefault(p => p.UserId == participantId);
-                        
+
                         if (existingParticipant != null)
                         {
                             // Update Amount cho participant đã tồn tại
-                            existingParticipant.Amount = viewModel.SplitType == SplitType.Custom && 
-                                                       viewModel.ParticipantAmounts != null && 
+                            existingParticipant.Amount = viewModel.SplitType == SplitType.Custom &&
+                                                       viewModel.ParticipantAmounts != null &&
                                                        viewModel.ParticipantAmounts.ContainsKey(participantId)
                                 ? viewModel.ParticipantAmounts[participantId]
                                 : null;
@@ -627,8 +627,8 @@ namespace QuanLyAnTrua.Controllers
                             {
                                 ExpenseId = expense.Id,
                                 UserId = participantId,
-                                Amount = viewModel.SplitType == SplitType.Custom && 
-                                         viewModel.ParticipantAmounts != null && 
+                                Amount = viewModel.SplitType == SplitType.Custom &&
+                                         viewModel.ParticipantAmounts != null &&
                                          viewModel.ParticipantAmounts.ContainsKey(participantId)
                                     ? viewModel.ParticipantAmounts[participantId]
                                     : null
@@ -818,69 +818,71 @@ namespace QuanLyAnTrua.Controllers
                     .Include(e => e.Participants)
                     .FirstOrDefaultAsync(e => e.Id == expense.Id);
 
-                // Gửi message cho từng participant
-                foreach (var participant in participants)
-                {
-                    // Bỏ qua nếu participant là payer (không cần gửi thông báo)
-                    if (participant.Id == expense.PayerId) continue;
-
-                    try
+                // Gửi message cho từng participant song song để tránh chờ tuần tự
+                var notificationTasks = participants
+                    .Where(participant => participant.Id != expense.PayerId)
+                    .Select(async participant =>
                     {
-                        // Tính số tiền participant phải trả
-                        decimal participantAmount = 0;
-                        var expenseParticipant = expenseWithParticipants?.Participants.FirstOrDefault(p => p.UserId == participant.Id);
-                        if (expenseParticipant != null)
+                        try
                         {
-                            if (expenseParticipant.Amount.HasValue)
+                            // Tính số tiền participant phải trả
+                            decimal participantAmount = 0;
+                            var expenseParticipant = expenseWithParticipants?.Participants.FirstOrDefault(p => p.UserId == participant.Id);
+                            if (expenseParticipant != null)
                             {
-                                // Dùng số tiền cụ thể
-                                participantAmount = expenseParticipant.Amount.Value;
+                                if (expenseParticipant.Amount.HasValue)
+                                {
+                                    // Dùng số tiền cụ thể
+                                    participantAmount = expenseParticipant.Amount.Value;
+                                }
+                                else
+                                {
+                                    // Chia đều: tính số tiền còn lại sau khi trừ các custom amounts
+                                    var participantsWithoutAmount = expenseWithParticipants!.Participants.Where(p => !p.Amount.HasValue).ToList();
+                                    var totalCustomAmount = expenseWithParticipants.Participants.Where(p => p.Amount.HasValue).Sum(p => p.Amount.Value);
+                                    var remainingAmount = expense.Amount - totalCustomAmount;
+                                    participantAmount = participantsWithoutAmount.Count > 0
+                                        ? Math.Round(remainingAmount / participantsWithoutAmount.Count, 2)
+                                        : 0;
+                                }
+                            }
+
+                            // Tạo message với URL trực tiếp (không dùng parse mode)
+                            // Telegram sẽ tự động detect URL và làm cho nó clickable
+                            var message = $"💰 Thông báo chi phí mới\n\n" +
+                                         $"📅 Ngày: {expenseDate}\n" +
+                                         $"💵 Tổng chi phí: {expense.Amount:N0} đ\n" +
+                                         $"👤 Người chi: {payer.Name}\n" +
+                                         $"📝 Mô tả: {description}\n\n" +
+                                         $"Bạn cần thanh toán: {participantAmount:N0} đ\n\n" +
+                                         $"🔗 Xem chi tiết và thanh toán:\n{publicViewUrl}";
+
+                            // Log URL để debug
+                            Log.Information("Gửi Telegram message với URL: {Url} cho user {UserId}", publicViewUrl, participant.Id);
+
+                            // Gửi message không dùng parse mode để Telegram tự động detect URL
+                            // Hoặc có thể dùng Markdown nếu muốn giữ format bold
+                            var sent = await TelegramHelper.SendMessageAsync(participant.TelegramUserId!, message, null);
+                            if (sent)
+                            {
+                                Log.Information("Đã gửi Telegram notification cho user {UserId} ({UserName}) về expense {ExpenseId}",
+                                    participant.Id, participant.Name, expense.Id);
                             }
                             else
                             {
-                                // Chia đều: tính số tiền còn lại sau khi trừ các custom amounts
-                                var participantsWithoutAmount = expenseWithParticipants!.Participants.Where(p => !p.Amount.HasValue).ToList();
-                                var totalCustomAmount = expenseWithParticipants.Participants.Where(p => p.Amount.HasValue).Sum(p => p.Amount.Value);
-                                var remainingAmount = expense.Amount - totalCustomAmount;
-                                participantAmount = participantsWithoutAmount.Count > 0 
-                                    ? Math.Round(remainingAmount / participantsWithoutAmount.Count, 2) 
-                                    : 0;
+                                Log.Warning("Không thể gửi Telegram notification cho user {UserId} về expense {ExpenseId}",
+                                    participant.Id, expense.Id);
                             }
                         }
-
-                        // Tạo message với URL trực tiếp (không dùng parse mode)
-                        // Telegram sẽ tự động detect URL và làm cho nó clickable
-                        var message = $"💰 Thông báo chi phí mới\n\n" +
-                                     $"📅 Ngày: {expenseDate}\n" +
-                                     $"💵 Tổng chi phí: {expense.Amount:N0} đ\n" +
-                                     $"👤 Người chi: {payer.Name}\n" +
-                                     $"📝 Mô tả: {description}\n\n" +
-                                     $"Bạn cần thanh toán: {participantAmount:N0} đ\n\n" +
-                                     $"🔗 Xem chi tiết và thanh toán:\n{publicViewUrl}";
-
-                        // Log URL để debug
-                        Log.Information("Gửi Telegram message với URL: {Url} cho user {UserId}", publicViewUrl, participant.Id);
-
-                        // Gửi message không dùng parse mode để Telegram tự động detect URL
-                        // Hoặc có thể dùng Markdown nếu muốn giữ format bold
-                        var sent = await TelegramHelper.SendMessageAsync(participant.TelegramUserId!, message, null);
-                        if (sent)
+                        catch (Exception ex)
                         {
-                            Log.Information("Đã gửi Telegram notification cho user {UserId} ({UserName}) về expense {ExpenseId}",
-                                participant.Id, participant.Name, expense.Id);
-                        }
-                        else
-                        {
-                            Log.Warning("Không thể gửi Telegram notification cho user {UserId} về expense {ExpenseId}",
+                            Log.Error(ex, "Lỗi khi gửi Telegram notification cho user {UserId} về expense {ExpenseId}",
                                 participant.Id, expense.Id);
                         }
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.Error(ex, "Lỗi khi gửi Telegram notification cho user {UserId} về expense {ExpenseId}",
-                            participant.Id, expense.Id);
-                    }
-                }
+                    })
+                    .ToList();
+
+                await Task.WhenAll(notificationTasks);
             }
             catch (Exception ex)
             {

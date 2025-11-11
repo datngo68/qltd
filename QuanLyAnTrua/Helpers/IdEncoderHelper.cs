@@ -36,6 +36,34 @@ namespace QuanLyAnTrua.Helpers
         }
 
         /// <summary>
+        /// Reload prefix, suffix và separator từ configuration (dùng khi config thay đổi động)
+        /// </summary>
+        public static void Reload(IConfiguration configuration)
+        {
+            var prefix = configuration["Payment:DescriptionPrefix"];
+            if (!string.IsNullOrWhiteSpace(prefix))
+            {
+                _prefix = prefix.Trim();
+            }
+
+            var suffix = configuration["Payment:DescriptionSuffix"];
+            if (!string.IsNullOrWhiteSpace(suffix))
+            {
+                _suffix = suffix.Trim();
+            }
+            else
+            {
+                _suffix = null; // Reset về null nếu không có trong config
+            }
+
+            var separator = configuration["Payment:DescriptionSeparator"];
+            if (!string.IsNullOrWhiteSpace(separator))
+            {
+                _separator = separator.Trim();
+            }
+        }
+
+        /// <summary>
         /// Lấy prefix hiện tại
         /// </summary>
         public static string GetPrefix() => _prefix;

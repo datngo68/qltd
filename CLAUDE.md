@@ -1,5 +1,5 @@
 # Hướng Dẫn Phát Triển - Quản Lý Ăn Trưa (QLTD)
-## Phản hồi bằng tiếng Việt xưng hô bạn tôi
+## Phản hồi bằng tiếng Việt và xưng hô là bạn - tôi
 File này chứa các hướng dẫn và quy ước quan trọng để phát triển hiệu quả trên project Quản Lý Ăn Trưa.
 
 ## 📋 Tổng Quan Project

@@ -184,20 +184,58 @@ namespace QuanLyAnTrua.Controllers
                     }
                 }
 
-                // Xác thực request
+                // Xác thực request - Hỗ trợ nhiều WebhookSecret theo từng tài khoản ngân hàng
                 var webhookVersion = _configuration["Casso:WebhookVersion"] ?? "V2";
                 var isValid = false;
+                string? webhookSecret = null;
 
                 try
                 {
+                    // Lấy AccountNumber từ transaction để tìm user và WebhookSecret tương ứng
+                    string? accountNumber = null;
+                    if (request.Data != null && !string.IsNullOrEmpty(request.Data.AccountNumber))
+                    {
+                        accountNumber = request.Data.AccountNumber;
+                    }
+                    else if (request.Transactions != null && request.Transactions.Any())
+                    {
+                        accountNumber = request.Transactions.FirstOrDefault()?.AccountNumber;
+                    }
+
+                    // Tìm user theo AccountNumber để lấy WebhookSecret riêng
+                    User? accountUser = null;
+                    if (!string.IsNullOrEmpty(accountNumber))
+                    {
+                        accountUser = await _context.Users
+                            .FirstOrDefaultAsync(u => u.BankAccount == accountNumber && u.IsActive);
+
+                        if (accountUser != null && !string.IsNullOrEmpty(accountUser.CassoWebhookSecret))
+                        {
+                            webhookSecret = accountUser.CassoWebhookSecret;
+                            _logger.LogInformation("Found user-specific WebhookSecret for account {AccountNumber}, UserId={UserId}, UserName={UserName}",
+                                accountNumber, accountUser.Id, accountUser.Name);
+                        }
+                        else if (accountUser != null)
+                        {
+                            _logger.LogInformation("User found for account {AccountNumber} but no WebhookSecret configured, will use default from appsettings",
+                                accountNumber);
+                        }
+                    }
+
+                    // Fallback về WebhookSecret trong appsettings.json nếu user không có
+                    if (string.IsNullOrEmpty(webhookSecret))
+                    {
+                        webhookSecret = _configuration["Casso:WebhookSecret"];
+                        _logger.LogInformation("Using default WebhookSecret from appsettings.json");
+                    }
+
                     if (webhookVersion == "V2")
                     {
                         // Webhook V2: Xác thực bằng chữ ký số
                         var signature = Request.Headers["X-Casso-Signature"].FirstOrDefault();
-                        var webhookSecret = _configuration["Casso:WebhookSecret"];
 
-                        _logger.LogInformation("Webhook V2 - Signature: {Signature}, Secret configured: {HasSecret}",
-                            signature != null ? "Present" : "Missing", !string.IsNullOrEmpty(webhookSecret));
+                        _logger.LogInformation("Webhook V2 - Signature: {Signature}, Secret configured: {HasSecret}, AccountNumber: {AccountNumber}",
+                            signature != null ? "Present" : "Missing", !string.IsNullOrEmpty(webhookSecret), accountNumber ?? "null");
 
                         // Nếu không có signature, có thể là request test từ Casso
                         if (string.IsNullOrEmpty(signature))
@@ -208,7 +246,7 @@ namespace QuanLyAnTrua.Controllers
                         }
                         else if (string.IsNullOrEmpty(webhookSecret))
                         {
-                            _logger.LogWarning("Missing webhook secret");
+                            _logger.LogWarning("Missing webhook secret for account {AccountNumber}", accountNumber ?? "unknown");
                             return Unauthorized(new { error = "Unauthorized" });
                         }
                         else
@@ -237,17 +275,18 @@ namespace QuanLyAnTrua.Controllers
                                 webhookSecret
                             );
 
-                            _logger.LogInformation("Signature verification result: {IsValid}", isValid);
+                            _logger.LogInformation("Signature verification result: {IsValid} for account {AccountNumber}",
+                                isValid, accountNumber ?? "unknown");
                         }
                     }
                     else
                     {
                         // Webhook cũ: Xác thực bằng secure-token
                         var secureToken = Request.Headers["secure-token"].FirstOrDefault();
-                        var expectedToken = _configuration["Casso:SecureToken"];
+                        var expectedToken = webhookSecret; // Dùng WebhookSecret làm SecureToken cho V1
 
-                        _logger.LogInformation("Webhook V1 - Token: {Token}, Expected token configured: {HasToken}",
-                            secureToken != null ? "Present" : "Missing", !string.IsNullOrEmpty(expectedToken));
+                        _logger.LogInformation("Webhook V1 - Token: {Token}, Expected token configured: {HasToken}, AccountNumber: {AccountNumber}",
+                            secureToken != null ? "Present" : "Missing", !string.IsNullOrEmpty(expectedToken), accountNumber ?? "null");
 
                         // Nếu không có secure-token, có thể là request test
                         if (string.IsNullOrEmpty(secureToken))
@@ -257,13 +296,14 @@ namespace QuanLyAnTrua.Controllers
                         }
                         else if (string.IsNullOrEmpty(expectedToken))
                         {
-                            _logger.LogWarning("Missing expected token");
+                            _logger.LogWarning("Missing expected token for account {AccountNumber}", accountNumber ?? "unknown");
                             return Unauthorized(new { error = "Unauthorized" });
                         }
                         else
                         {
                             isValid = CassoWebhookHelper.VerifySecureToken(secureToken, expectedToken);
-                            _logger.LogInformation("Token verification result: {IsValid}", isValid);
+                            _logger.LogInformation("Token verification result: {IsValid} for account {AccountNumber}",
+                                isValid, accountNumber ?? "unknown");
                         }
                     }
                 }
@@ -572,6 +612,42 @@ namespace QuanLyAnTrua.Controllers
 
                 _logger.LogInformation("Created payment: Id={PaymentId}, UserId={UserId} (người thanh toán: {UserName}), CreditorId={CreditorId} (người được thanh toán: {CreditorName}), Amount={Amount}, Status={Status}",
                     monthlyPayment.Id, user.Id, user.Name, monthlyPayment.CreditorId, creditor?.Name ?? "null", transaction.Amount, monthlyPayment.Status);
+
+                // Gửi thông báo Telegram cho người nhận tiền (creditor)
+                if (creditor != null && !string.IsNullOrEmpty(creditor.TelegramUserId))
+                {
+                    try
+                    {
+                        var amountFormatted = roundedAmount.ToString("N0");
+                        var message = $"💰 <b>Nhận được thanh toán</b>\n\n" +
+                                     $"👤 Người gửi: <b>{user.Name}</b>\n" +
+                                     $"💵 Số tiền: <b>{amountFormatted} VNĐ</b>\n" +
+                                     $"📅 Tháng: <b>{month}/{year}</b>\n" +
+                                     $"🕐 Thời gian: <b>{transactionDate:dd/MM/yyyy HH:mm}</b>";
+
+                        var telegramSent = await TelegramHelper.SendHtmlMessageAsync(creditor.TelegramUserId, message);
+                        if (telegramSent)
+                        {
+                            _logger.LogInformation("Đã gửi thông báo Telegram cho creditor {CreditorId} ({CreditorName}) về thanh toán từ {UserId} ({UserName})",
+                                creditor.Id, creditor.Name, user.Id, user.Name);
+                        }
+                        else
+                        {
+                            _logger.LogWarning("Không thể gửi thông báo Telegram cho creditor {CreditorId} ({CreditorName})",
+                                creditor.Id, creditor.Name);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Lỗi khi gửi thông báo Telegram cho creditor {CreditorId}", creditor.Id);
+                        // Không throw exception, chỉ log lỗi vì payment đã được tạo thành công
+                    }
+                }
+                else if (creditor != null && string.IsNullOrEmpty(creditor.TelegramUserId))
+                {
+                    _logger.LogInformation("Creditor {CreditorId} ({CreditorName}) chưa cấu hình TelegramUserId, không gửi thông báo",
+                        creditor.Id, creditor.Name);
+                }
 
                 return (true, null);
             }

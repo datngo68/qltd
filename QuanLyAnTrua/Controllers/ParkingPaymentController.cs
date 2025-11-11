@@ -105,6 +105,17 @@ namespace QuanLyAnTrua.Controllers
             ViewBag.PriceMotorbike = PriceMotorbike;
             ViewBag.PriceCar = PriceCar;
             ViewBag.PriceCarOvernight = PriceCarOvernight;
+
+            // Thông tin tài khoản công ty
+            ViewBag.CompanyBankName = CompanyBankName;
+            ViewBag.CompanyAccountNumber = CompanyAccountNumber;
+            ViewBag.CompanyAccountHolder = CompanyAccountHolder;
+
+            // Thông tin tài khoản nhân viên
+            ViewBag.StaffBankName = StaffBankName;
+            ViewBag.StaffAccountNumber = StaffAccountNumber;
+            ViewBag.StaffAccountHolder = StaffAccountHolder;
+
             return View();
         }
 

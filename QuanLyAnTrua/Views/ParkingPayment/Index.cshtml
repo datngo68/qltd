@@ -7,6 +7,16 @@
     var priceMotorbike = ViewBag.PriceMotorbike ?? 70000m;
     var priceCar = ViewBag.PriceCar ?? 700000m;
     var priceCarOvernight = ViewBag.PriceCarOvernight ?? 900000m;
+
+    // Thông tin tài khoản công ty
+    var companyBankName = ViewBag.CompanyBankName ?? "BIDV";
+    var companyAccountNumber = ViewBag.CompanyAccountNumber ?? "8601276666";
+    var companyAccountHolder = ViewBag.CompanyAccountHolder ?? "Công ty TNHH MTV Dịch vụ Xây dựng Thịnh Thái";
+
+    // Thông tin tài khoản nhân viên
+    var staffBankName = ViewBag.StaffBankName ?? "MBBank";
+    var staffAccountNumber = ViewBag.StaffAccountNumber ?? "0936.187.187";
+    var staffAccountHolder = ViewBag.StaffAccountHolder ?? "Nguyễn Thanh Thu";
 }
 
 <h2><i class="bi bi-qr-code-scan"></i> Tạo QR thanh toán phí giữ xe</h2>
@@ -160,9 +170,9 @@
                                 <label class="form-check-label" for="accountCompany">
                                     <strong>Tài khoản công ty</strong><br>
                                     <small class="text-muted">
-                                        Tên TK: Công ty TNHH MTV Dịch vụ Xây dựng Thịnh Thái<br>
-                                        Số TK: 8601276666<br>
-                                        Ngân hàng: BIDV
+                                        Tên TK: @companyAccountHolder<br>
+                                        Số TK: @companyAccountNumber<br>
+                                        Ngân hàng: @companyBankName
                                     </small>
                                 </label>
                             </div>
@@ -172,9 +182,9 @@
                                 <label class="form-check-label" for="accountStaff">
                                     <strong>Tài khoản nhân viên CSKH</strong><br>
                                     <small class="text-muted">
-                                        Tên TK: Nguyễn Thanh Thảo<br>
-                                        Số TK: 0936.187.187<br>
-                                        Ngân hàng: MB Bank
+                                        Tên TK: @staffAccountHolder<br>
+                                        Số TK: @staffAccountNumber<br>
+                                        Ngân hàng: @staffBankName
                                     </small>
                                 </label>
                             </div>
@@ -230,7 +240,7 @@
             motorbike: @priceMotorbike,
             car: @priceCar,
             car_overnight: @priceCarOvernight
-                                            };
+                                                    };
 
         // Lưu vào localStorage
         const STORAGE_KEY_LICENSE_PLATE = 'parking_payment_license_plate';
@@ -313,28 +323,28 @@
                 const card = document.createElement('div');
                 card.className = 'col-12 col-md-6 col-lg-4 mb-3';
                 card.innerHTML = `
-                            <div class="card h-100">
-                                <div class="card-body">
-                                    <h6 class="card-title">
-                                        <i class="bi bi-car-front"></i> ${qr.licensePlate}
-                                        <button class="btn btn-sm btn-link text-danger float-end p-0" onclick="removeQRFromHistory('${qr.key}')" title="Xóa">
-                                            <i class="bi bi-x-circle"></i>
-                                        </button>
-                                    </h6>
-                                    <p class="card-text mb-1">
-                                        <small class="text-muted">
-                                            <i class="bi bi-bicycle"></i> ${qr.vehicleTypeName}<br>
-                                            <i class="bi bi-calendar"></i> ${periodText}<br>
-                                            <i class="bi bi-currency-dollar"></i> ${parseInt(qr.totalAmount).toLocaleString('vi-VN')} đ<br>
-                                            <i class="bi bi-clock"></i> ${createdAt.toLocaleString('vi-VN')}
-                                        </small>
-                                    </p>
-                                    <button class="btn btn-sm btn-primary w-100" onclick="recreateQR('${qr.key}')">
-                                        <i class="bi bi-qr-code"></i> Tạo lại QR
-                                    </button>
-                                </div>
-                            </div>
-                        `;
+                                    <div class="card h-100">
+                                        <div class="card-body">
+                                            <h6 class="card-title">
+                                                <i class="bi bi-car-front"></i> ${qr.licensePlate}
+                                                <button class="btn btn-sm btn-link text-danger float-end p-0" onclick="removeQRFromHistory('${qr.key}')" title="Xóa">
+                                                    <i class="bi bi-x-circle"></i>
+                                                </button>
+                                            </h6>
+                                            <p class="card-text mb-1">
+                                                <small class="text-muted">
+                                                    <i class="bi bi-bicycle"></i> ${qr.vehicleTypeName}<br>
+                                                    <i class="bi bi-calendar"></i> ${periodText}<br>
+                                                    <i class="bi bi-currency-dollar"></i> ${parseInt(qr.totalAmount).toLocaleString('vi-VN')} đ<br>
+                                                    <i class="bi bi-clock"></i> ${createdAt.toLocaleString('vi-VN')}
+                                                </small>
+                                            </p>
+                                            <button class="btn btn-sm btn-primary w-100" onclick="recreateQR('${qr.key}')">
+                                                <i class="bi bi-qr-code"></i> Tạo lại QR
+                                            </button>
+                                        </div>
+                                    </div>
+                                `;
                 historyList.appendChild(card);
             });
         }
@@ -461,7 +471,7 @@
                 document.getElementById('totalAmountAlert').className = 'alert alert-warning';
                 document.getElementById('totalAmountAlert').innerHTML =
                     `<h6 class="mb-1"><i class="bi bi-exclamation-triangle"></i> Cảnh báo:</h6>
-                                             <p class="mb-0">Chỉ có thể thanh toán tối đa ${MAX_MONTHS} tháng một lần. Vui lòng chọn lại khoảng thời gian.</p>`;
+                                                     <p class="mb-0">Chỉ có thể thanh toán tối đa ${MAX_MONTHS} tháng một lần. Vui lòng chọn lại khoảng thời gian.</p>`;
                 document.getElementById('totalAmountAlert').style.display = 'block';
                 return;
             }
@@ -473,10 +483,10 @@
             document.getElementById('totalAmountAlert').className = 'alert alert-success';
             document.getElementById('totalAmountAlert').innerHTML =
                 `<h6 class="mb-1"><i class="bi bi-calculator"></i> Tổng tiền:</h6>
-                                         <p class="mb-0">
-                                             <span id="totalMonths">${totalMonths}</span> tháng × <span id="pricePerMonth">${pricePerMonth.toLocaleString('vi-VN')}</span> đ = 
-                                             <strong class="text-success" id="totalAmount">${totalAmount.toLocaleString('vi-VN')}</strong> đ
-                                         </p>`;
+                                                 <p class="mb-0">
+                                                     <span id="totalMonths">${totalMonths}</span> tháng × <span id="pricePerMonth">${pricePerMonth.toLocaleString('vi-VN')}</span> đ = 
+                                                     <strong class="text-success" id="totalAmount">${totalAmount.toLocaleString('vi-VN')}</strong> đ
+                                                 </p>`;
             document.getElementById('totalAmountAlert').style.display = 'block';
         }
 

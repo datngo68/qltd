@@ -44,6 +44,9 @@ namespace QuanLyAnTrua.Models
         [Display(Name = "Ảnh đại diện")]
         public string? AvatarPath { get; set; }
 
+        [Display(Name = "CASSO Webhook Secret")]
+        public string? CassoWebhookSecret { get; set; }
+
         // Navigation properties
         [ForeignKey("GroupId")]
         public virtual Group? Group { get; set; }

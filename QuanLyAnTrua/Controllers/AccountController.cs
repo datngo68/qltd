@@ -171,7 +171,7 @@ namespace QuanLyAnTrua.Controllers
         // POST: Account/Profile
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Profile(int id, [Bind("Id,Name,BankName,BankAccount,AccountHolderName,TelegramUserId")] User user, IFormFile? avatarFile)
+        public async Task<IActionResult> Profile(int id, [Bind("Id,Name,BankName,BankAccount,AccountHolderName,TelegramUserId,CassoWebhookSecret")] User user, IFormFile? avatarFile)
         {
             if (id != user.Id)
             {
@@ -215,6 +215,15 @@ namespace QuanLyAnTrua.Controllers
 
                     // Cập nhật Telegram User ID
                     existingUser.TelegramUserId = user.TelegramUserId;
+
+                    // Cập nhật CASSO Webhook Secret - chỉ cập nhật nếu có giá trị mới
+                    // Với input type="password", nếu user không nhập gì thì giá trị sẽ là empty string
+                    // Chỉ cập nhật nếu có giá trị (không rỗng) để tránh ghi đè giá trị hiện tại
+                    if (!string.IsNullOrWhiteSpace(user.CassoWebhookSecret))
+                    {
+                        existingUser.CassoWebhookSecret = user.CassoWebhookSecret;
+                    }
+                    // Nếu để trống, giữ nguyên giá trị hiện tại (không cập nhật)
 
                     // Xử lý upload avatar
                     if (avatarFile != null && avatarFile.Length > 0)
@@ -265,6 +274,7 @@ namespace QuanLyAnTrua.Controllers
             userToView.BankAccount = user.BankAccount;
             userToView.AccountHolderName = user.AccountHolderName;
             userToView.TelegramUserId = user.TelegramUserId;
+            userToView.CassoWebhookSecret = user.CassoWebhookSecret;
 
             // Load danh sách ngân hàng
             ViewBag.Banks = Helpers.QRCodeHelper.GetSupportedBanks().OrderBy(b => b.Name).ToList();

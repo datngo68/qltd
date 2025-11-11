@@ -118,6 +118,21 @@
                 </small>
             </div>
 
+            <hr class="my-4" />
+            <h5 class="mb-3"><i class="bi bi-shield-lock"></i> CASSO Webhook Secret</h5>
+
+            <div class="mb-3">
+                <label asp-for="CassoWebhookSecret" class="form-label">
+                    <i class="bi bi-key"></i> Webhook Secret
+                </label>
+                <input asp-for="CassoWebhookSecret" class="form-control" type="password" placeholder="Nhập Webhook Secret từ CASSO" />
+                <span asp-validation-for="CassoWebhookSecret" class="text-danger"></span>
+                <small class="form-text text-muted">
+                    <i class="bi bi-info-circle"></i> Mã bảo mật webhook từ CASSO cho tài khoản ngân hàng này. 
+                    Để trống nếu dùng WebhookSecret mặc định từ appsettings.json
+                </small>
+            </div>
+
             <div class="mb-3 d-flex flex-column flex-md-row gap-2">
                 <button type="submit" class="btn btn-primary w-100 w-md-auto">
                     <i class="bi bi-save"></i> Lưu thông tin

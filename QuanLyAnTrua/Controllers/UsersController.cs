@@ -95,7 +95,7 @@ namespace QuanLyAnTrua.Controllers
         // POST: Users/Create
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create([Bind("Name,IsActive,Role,BankName,BankAccount,AccountHolderName,TelegramUserId")] User user, string Username, string Password, int? GroupId)
+        public async Task<IActionResult> Create([Bind("Name,IsActive,Role,BankName,BankAccount,AccountHolderName,TelegramUserId,CassoWebhookSecret")] User user, string Username, string Password, int? GroupId)
         {
             var isSuperAdmin = SessionHelper.IsSuperAdmin(HttpContext);
             var isAdmin = SessionHelper.IsAdmin(HttpContext);
@@ -326,7 +326,7 @@ namespace QuanLyAnTrua.Controllers
         // POST: Users/Edit/5
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, [Bind("Id,Name,IsActive,CreatedAt,BankName,BankAccount,AccountHolderName,TelegramUserId")] User user, string? Username, string? NewPassword, int? GroupId, string? Role, IFormFile? avatarFile)
+        public async Task<IActionResult> Edit(int id, [Bind("Id,Name,IsActive,CreatedAt,BankName,BankAccount,AccountHolderName,TelegramUserId,CassoWebhookSecret")] User user, string? Username, string? NewPassword, int? GroupId, string? Role, IFormFile? avatarFile)
         {
             if (id != user.Id)
             {
@@ -428,6 +428,7 @@ namespace QuanLyAnTrua.Controllers
                     existingUser.BankAccount = user.BankAccount;
                     existingUser.AccountHolderName = user.AccountHolderName;
                     existingUser.TelegramUserId = user.TelegramUserId;
+                    existingUser.CassoWebhookSecret = user.CassoWebhookSecret; // Có thể null nếu để trống
 
                     // Xử lý upload avatar
                     if (avatarFile != null && avatarFile.Length > 0)
