@@ -92,19 +92,22 @@
     </div>
 </div>
 
-@* Hiển thị "Bạn cần trả cho" nếu có CurrentUserId *@
-@if (Model.CurrentUserId.HasValue && Model.CreditorSummaries.Any(c => c.DebtDetails.Any(d => d.DebtorId ==
-Model.CurrentUserId.Value)))
+@* Hiển thị "Bạn cần trả cho" với số nợ thuần *@
+@if (Model.CurrentUserId.HasValue)
 {
-    var myDebts = Model.CreditorSummaries
-    .Select(c => new
-    {
-        Creditor = c,
-        MyDebtDetails = c.DebtDetails.Where(d => d.DebtorId == Model.CurrentUserId.Value && d.RemainingAmount > 0).ToList(),
-        TotalMyDebt = c.DebtDetails.Where(d => d.DebtorId == Model.CurrentUserId.Value).Sum(d => d.RemainingAmount)
-    })
-    .Where(x => x.MyDebtDetails.Any() && x.TotalMyDebt > 0)
-    .ToList();
+    var currentUserId = Model.CurrentUserId.Value;
+    var currentUserDebt = Model.UserDebts.FirstOrDefault(u => u.UserId == currentUserId);
+    var myDebts = Model.NetDebts
+        .Where(nd => nd.DebtorId == currentUserId && nd.Amount > 0)
+        .Select(nd => new
+        {
+            Summary = nd,
+            MyDebtDetails = currentUserDebt?.DebtDetails
+                .Where(d => d.CreditorId == nd.CreditorId && d.RemainingAmount > 0)
+                .OrderBy(d => d.ExpenseDate)
+                .ToList() ?? new List<QuanLyAnTrua.Models.ViewModels.DebtDetail>()
+        })
+        .ToList();
 
     if (myDebts.Any())
     {
@@ -112,136 +115,131 @@ Model.CurrentUserId.Value)))
         <div class="row mb-4">
             @foreach (var myDebt in myDebts)
             {
+                var roundedAmount = Math.Ceiling(myDebt.Summary.Amount);
+                var hasBankInfo = !string.IsNullOrEmpty(myDebt.Summary.CreditorBankName) &&
+                                  !string.IsNullOrEmpty(myDebt.Summary.CreditorBankAccount);
+                var transferContent = hasBankInfo
+                    ? IdEncoderHelper.CreatePaymentDescription(
+                        myDebt.Summary.CreditorId,
+                        currentUserId,
+                        Model.Year,
+                        Model.Month)
+                    : "";
+
                 <div class="col-12 col-md-6 mb-3">
                     <div class="card border-warning">
                         <div class="card-header bg-warning text-dark">
                             <h5 class="mb-0 d-flex align-items-center gap-2">
-                                <img src="@AvatarHelper.GetAvatarUrl(Model.UserDebts.FirstOrDefault(u => u.UserId == myDebt.Creditor.CreditorId)?.AvatarPath)"
+                                <img src="@AvatarHelper.GetAvatarUrl(myDebt.Summary.CreditorAvatarPath)"
                                     alt="Avatar" class="rounded-circle" style="width: 32px; height: 32px; object-fit: cover;" />
-                                <i class="bi bi-person-check"></i> @myDebt.Creditor.CreditorName
+                                <i class="bi bi-person-check"></i> @myDebt.Summary.CreditorName
                             </h5>
                         </div>
                         <div class="card-body">
-                            <div class="row">
-                                <div class="col-md-8">
-                                    <p class="mb-2">
-                                        <strong>Tổng số tiền cần trả: </strong>
-                                        <span class="text-danger fw-bold fs-5">@myDebt.TotalMyDebt.ToString("N0") đ</span>
-                                    </p>
+                            <p class="mb-2">
+                                <strong>Tổng số tiền cần trả: </strong>
+                                <span class="text-danger fw-bold fs-5">@myDebt.Summary.Amount.ToString("N0") đ</span>
+                            </p>
 
-                                    @{
-                                        var transferContent = !string.IsNullOrEmpty(myDebt.Creditor.BankName) &&
-                                        !string.IsNullOrEmpty(myDebt.Creditor.BankAccount)
-                                        ? IdEncoderHelper.CreatePaymentDescription(
-                                        myDebt.Creditor.CreditorId,
-                                        Model.CurrentUserId.Value,
-                                        Model.Year,
-                                        Model.Month
-                                        )
-                                        : "";
-                                        var roundedAmount = Math.Ceiling(myDebt.TotalMyDebt);
-                                    }
-
-                                    @if (!string.IsNullOrEmpty(myDebt.Creditor.BankName) ||
-                                                            !string.IsNullOrEmpty(myDebt.Creditor.BankAccount))
+                            @if (hasBankInfo)
+                            {
+                                <p class="mb-2">
+                                    <strong><i class="bi bi-bank"></i> Thông tin ngân hàng:</strong><br />
+                                    @if (!string.IsNullOrEmpty(myDebt.Summary.CreditorBankName))
                                     {
-                                        <p class="mb-2">
-                                            <strong><i class="bi bi-bank"></i> Thông tin ngân hàng:</strong><br />
-                                            @if (!string.IsNullOrEmpty(myDebt.Creditor.BankName))
-                                            {
-                                                <span>Ngân hàng: @myDebt.Creditor.BankName</span>
-                                                <br />
-                                            }
-                                            @if (!string.IsNullOrEmpty(myDebt.Creditor.BankAccount))
-                                            {
-                                                <span>
-                                                    Số tài khoản: <strong>@myDebt.Creditor.BankAccount</strong>
-                                                    <button type="button" class="btn btn-sm btn-link p-0 ms-1"
-                                                        data-copy="@myDebt.Creditor.BankAccount" title="Copy số tài khoản">
-                                                        <i class="bi bi-clipboard"></i>
-                                                    </button>
-                                                </span>
-                                                <br />
-                                            }
-                                            @if (!string.IsNullOrEmpty(myDebt.Creditor.AccountHolderName))
-                                            {
-                                                <span>Chủ tài khoản: @myDebt.Creditor.AccountHolderName</span>
-                                                <br />
-                                            }
-                                            <span>
-                                                Số tiền: <strong>@roundedAmount.ToString("N0") đ</strong>
-                                                <button type="button" class="btn btn-sm btn-link p-0 ms-1"
-                                                    data-copy="@((int)roundedAmount)" title="Copy số tiền">
-                                                    <i class="bi bi-clipboard"></i>
-                                                </button>
-                                            </span>
-                                            <br />
-                                            <span>
-                                                Nội dung CK: <strong>@transferContent</strong>
-                                                <button type="button" class="btn btn-sm btn-link p-0 ms-1" data-copy="@transferContent"
-                                                    title="Copy nội dung chuyển khoản">
-                                                    <i class="bi bi-clipboard"></i>
-                                                </button>
-                                            </span>
-                                        </p>
+                                        <span>Ngân hàng: @myDebt.Summary.CreditorBankName</span><br />
                                     }
-
-                                    <details class="mb-2">
-                                        <summary class="btn btn-sm btn-outline-info">Xem chi tiết các khoản nợ</summary>
-                                        <ul class="mt-2">
-                                            @foreach (var detail in myDebt.MyDebtDetails.OrderBy(d => d.ExpenseDate))
-                                            {
-                                                <li>
-                                                    <small>@detail.ExpenseDate.ToString("dd/MM/yyyy"):
-                                                        @if (detail.Amount != detail.RemainingAmount)
-                                                        {
-                                                            <span>@detail.RemainingAmount.ToString("N0") đ (ban đầu:
-                                                                @detail.Amount.ToString("N0") đ)</span>
-                                                        }
-                                                        else
-                                                        {
-                                                            <span>@detail.RemainingAmount.ToString("N0") đ</span>
-                                                        }
-                                                    </small>
-                                                    @if (!string.IsNullOrEmpty(detail.Description))
-                                                    {
-                                                        <small class="text-muted"> - @detail.Description</small>
-                                                    }
-                                                </li>
-                                            }
-                                        </ul>
-                                    </details>
-                                </div>
-                                <div class="col-md-4 text-center">
-                                    @if (!string.IsNullOrEmpty(myDebt.Creditor.BankName) &&
-                                                            !string.IsNullOrEmpty(myDebt.Creditor.BankAccount))
-                                    {
-                                        var qrCodeUrl = Url.Action("GenerateQRCode", "Payments", new
-                                        {
-                                            bankName = myDebt.Creditor.BankName,
-                                            bankAccount = myDebt.Creditor.BankAccount,
-                                            accountHolderName = myDebt.Creditor.AccountHolderName ?? "",
-                                            amount = roundedAmount,
-                                            creditorId = myDebt.Creditor.CreditorId,
-                                            userId = Model.CurrentUserId.Value,
-                                            year = Model.Year,
-                                            month = Model.Month
-                                        });
-                                        <img src="@qrCodeUrl" alt="QR Code" class="img-fluid" style="max-width: 150px; cursor: pointer;"
-                                            onclick="showQRCodeModal('@myDebt.Creditor.CreditorName', '@myDebt.TotalMyDebt.ToString("N0")', '@qrCodeUrl')" />
-                                        <br />
-                                        <small class="text-muted">Mã QR chuyển khoản</small>
-                                        <br />
-                                        <button class="btn btn-sm btn-outline-primary mt-2"
-                                            onclick="showQRCodeModal('@myDebt.Creditor.CreditorName', '@myDebt.TotalMyDebt.ToString("N0")', '@qrCodeUrl')">
-                                            <i class="bi bi-qr-code-scan"></i> Xem QR lớn
+                                    <span>
+                                        Số tài khoản: <strong>@myDebt.Summary.CreditorBankAccount</strong>
+                                        <button type="button" class="btn btn-sm btn-link p-0 ms-1"
+                                            data-copy="@myDebt.Summary.CreditorBankAccount" title="Copy số tài khoản">
+                                            <i class="bi bi-clipboard"></i>
                                         </button>
-                                    }
-                                    else
+                                    </span><br />
+                                    @if (!string.IsNullOrEmpty(myDebt.Summary.CreditorAccountHolderName))
                                     {
-                                        <small class="text-muted">Chưa có thông tin ngân hàng</small>
+                                        <span>Chủ tài khoản: @myDebt.Summary.CreditorAccountHolderName</span><br />
                                     }
+                                    <span>
+                                        Số tiền: <strong>@roundedAmount.ToString("N0") đ</strong>
+                                        <button type="button" class="btn btn-sm btn-link p-0 ms-1"
+                                            data-copy="@((int)roundedAmount)" title="Copy số tiền">
+                                            <i class="bi bi-clipboard"></i>
+                                        </button>
+                                    </span><br />
+                                    <span>
+                                        Nội dung CK: <strong>@transferContent</strong>
+                                        <button type="button" class="btn btn-sm btn-link p-0 ms-1"
+                                            data-copy="@transferContent" title="Copy nội dung chuyển khoản">
+                                            <i class="bi bi-clipboard"></i>
+                                        </button>
+                                    </span>
+                                </p>
+                            }
+
+                            <details class="mb-2">
+                                <summary class="btn btn-sm btn-outline-info">Xem chi tiết các khoản nợ</summary>
+                                <ul class="mt-2">
+                                    @foreach (var detail in myDebt.MyDebtDetails)
+                                    {
+                                        <li>
+                                            <small>@detail.ExpenseDate.ToString("dd/MM/yyyy"):
+                                                @if (detail.Amount != detail.RemainingAmount)
+                                                {
+                                                    <span>@detail.RemainingAmount.ToString("N0") đ (ban đầu: @detail.Amount.ToString("N0") đ)</span>
+                                                }
+                                                else
+                                                {
+                                                    <span>@detail.RemainingAmount.ToString("N0") đ</span>
+                                                }
+                                            </small>
+                                            @if (!string.IsNullOrEmpty(detail.Description))
+                                            {
+                                                <small class="text-muted"> - @detail.Description</small>
+                                            }
+                                        </li>
+                                    }
+                                </ul>
+                            </details>
+
+                            @if (hasBankInfo)
+                            {
+                                var qrCodeUrl = Url.Action("GenerateQRCode", "Payments", new
+                                {
+                                    bankName = myDebt.Summary.CreditorBankName,
+                                    bankAccount = myDebt.Summary.CreditorBankAccount,
+                                    accountHolderName = myDebt.Summary.CreditorAccountHolderName ?? "",
+                                    amount = roundedAmount,
+                                    creditorId = myDebt.Summary.CreditorId,
+                                    userId = currentUserId,
+                                    year = Model.Year,
+                                    month = Model.Month
+                                });
+                                <div class="text-center mt-3">
+                                    <img src="@qrCodeUrl" alt="QR Code" class="img-fluid" style="max-width: 150px; cursor: pointer;"
+                                        onclick="showQRCodeModal('@myDebt.Summary.CreditorName', '@myDebt.Summary.Amount.ToString("N0")', '@qrCodeUrl')" />
+                                    <br />
+                                    <small class="text-muted">Mã QR chuyển khoản</small>
+                                    <br />
+                                    <button class="btn btn-sm btn-outline-primary mt-2"
+                                        onclick="showQRCodeModal('@myDebt.Summary.CreditorName', '@myDebt.Summary.Amount.ToString("N0")', '@qrCodeUrl')">
+                                        <i class="bi bi-qr-code-scan"></i> Xem QR lớn
+                                    </button>
                                 </div>
+                            }
+                            else
+                            {
+                                <div class="text-muted">Chưa có thông tin ngân hàng</div>
+                            }
+
+                            <div class="mt-3">
+                                <button type="button"
+                                    id="btnPay_desktop_@(currentUserId)_@(myDebt.Summary.CreditorId)"
+                                    class="btn btn-success btn-sm"
+                                    onclick="markAsPaid('@ViewBag.Token', @currentUserId, @myDebt.Summary.Amount.ToString("F2", System.Globalization.CultureInfo.InvariantCulture), '@myDebt.Summary.CreditorName', '@myDebt.Summary.CreditorId')">
+                                    <i class="bi bi-check-circle"></i> Xác nhận đã thanh toán
+                                </button>
+                                <div id="paymentStatus_@(currentUserId)_@(myDebt.Summary.CreditorId)" class="mt-2"></div>
                             </div>
                         </div>
                     </div>

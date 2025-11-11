@@ -1223,6 +1223,45 @@ namespace QuanLyAnTrua.Controllers
                 }
             }
 
+            // Khấu trừ các khoản nợ hai chiều để lấy nợ thuần
+            DebtHelper.NetMutualDebts(allDebtDetails);
+
+            foreach (var debt in userDebts)
+            {
+                debt.DebtDetails = debt.DebtDetails
+                    .Where(d => d.RemainingAmount > 0)
+                    .OrderBy(d => d.ExpenseDate)
+                    .ThenBy(d => d.ExpenseId)
+                    .ToList();
+            }
+
+            var netDebtSummaries = allDebtDetails
+                .Where(d => d.RemainingAmount > 0)
+                .GroupBy(d => new { d.DebtorId, d.CreditorId })
+                .Select(g =>
+                {
+                    var debtorUser = users.FirstOrDefault(u => u.Id == g.Key.DebtorId);
+                    var creditorUser = users.FirstOrDefault(u => u.Id == g.Key.CreditorId);
+
+                    return new NetDebtSummary
+                    {
+                        DebtorId = g.Key.DebtorId,
+                        DebtorName = debtorUser?.Name ?? g.First().DebtorName,
+                        DebtorAvatarPath = debtorUser?.AvatarPath ?? g.First().DebtorAvatarPath,
+                        CreditorId = g.Key.CreditorId,
+                        CreditorName = creditorUser?.Name ?? g.First().CreditorName,
+                        CreditorAvatarPath = creditorUser?.AvatarPath ?? g.First().CreditorAvatarPath,
+                        CreditorBankName = creditorUser?.BankName,
+                        CreditorBankAccount = creditorUser?.BankAccount,
+                        CreditorAccountHolderName = creditorUser?.AccountHolderName,
+                        Amount = g.Sum(d => d.RemainingAmount)
+                    };
+                })
+                .Where(nd => nd.Amount > 0)
+                .OrderBy(nd => nd.DebtorName)
+                .ThenBy(nd => nd.CreditorName)
+                .ToList();
+
             // Prepare expense details
             var expenseDetails = expenses.Select(e => new ExpenseDetail
             {
@@ -1300,7 +1339,8 @@ namespace QuanLyAnTrua.Controllers
                 UserDebts = userDebts,
                 Expenses = expenseDetails,
                 CreditorSummaries = creditorSummaries,
-                CurrentUserId = userId
+                CurrentUserId = userId,
+                NetDebts = netDebtSummaries
             };
         }
         //Trước commit này là cái thêm phần chi phí cho từng người
@@ -1527,6 +1567,45 @@ namespace QuanLyAnTrua.Controllers
                 }
             }
 
+            // Khấu trừ các khoản nợ hai chiều để lấy nợ thuần
+            DebtHelper.NetMutualDebts(allDebtDetails);
+
+            foreach (var debt in userDebts)
+            {
+                debt.DebtDetails = debt.DebtDetails
+                    .Where(d => d.RemainingAmount > 0)
+                    .OrderBy(d => d.ExpenseDate)
+                    .ThenBy(d => d.ExpenseId)
+                    .ToList();
+            }
+
+            var netDebtSummaries = allDebtDetails
+                .Where(d => d.RemainingAmount > 0)
+                .GroupBy(d => new { d.DebtorId, d.CreditorId })
+                .Select(g =>
+                {
+                    var debtorUser = users.FirstOrDefault(u => u.Id == g.Key.DebtorId);
+                    var creditorUser = users.FirstOrDefault(u => u.Id == g.Key.CreditorId);
+
+                    return new NetDebtSummary
+                    {
+                        DebtorId = g.Key.DebtorId,
+                        DebtorName = debtorUser?.Name ?? g.First().DebtorName,
+                        DebtorAvatarPath = debtorUser?.AvatarPath ?? g.First().DebtorAvatarPath,
+                        CreditorId = g.Key.CreditorId,
+                        CreditorName = creditorUser?.Name ?? g.First().CreditorName,
+                        CreditorAvatarPath = creditorUser?.AvatarPath ?? g.First().CreditorAvatarPath,
+                        CreditorBankName = creditorUser?.BankName,
+                        CreditorBankAccount = creditorUser?.BankAccount,
+                        CreditorAccountHolderName = creditorUser?.AccountHolderName,
+                        Amount = g.Sum(d => d.RemainingAmount)
+                    };
+                })
+                .Where(nd => nd.Amount > 0)
+                .OrderBy(nd => nd.DebtorName)
+                .ThenBy(nd => nd.CreditorName)
+                .ToList();
+
             // Prepare expense details (chỉ chi phí trong tháng)
             var expenseDetails = expenses.Select(e => new ExpenseDetail
             {
@@ -1599,7 +1678,8 @@ namespace QuanLyAnTrua.Controllers
                 UserDebts = userDebts, // Nợ từ tất cả các tháng
                 Expenses = expenseDetails, // Chỉ chi phí trong tháng
                 CreditorSummaries = creditorSummaries, // Nợ từ tất cả các tháng
-                CurrentUserId = userId
+                CurrentUserId = userId,
+                NetDebts = netDebtSummaries
             };
         }
 

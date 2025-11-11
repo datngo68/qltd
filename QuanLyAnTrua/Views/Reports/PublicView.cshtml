@@ -415,111 +415,77 @@
 
             @* Hiển thị "Bạn cần trả cho" *@
             @{
+                var netDebts = Model.NetDebts.Where(nd => nd.Amount > 0).ToList();
                 var usersWithDebtsToShow = new List<dynamic>();
-                
+
                 if (reportType == "User" && Model.CurrentUserId.HasValue)
                 {
-                    // Hiển thị nợ của user cụ thể - chỉ các khoản nợ còn lại
-                    var userDebt = Model.UserDebts.FirstOrDefault(u => u.UserId == Model.CurrentUserId.Value);
-                    if (userDebt != null && userDebt.DebtDetails.Any())
-                    {
-                        // Chỉ lấy các khoản nợ còn lại (RemainingAmount > 0)
-                        var remainingDebtDetails = userDebt.DebtDetails
-                            .Where(d => d.RemainingAmount > 0)
-                            .ToList();
+                    var currentUserId = Model.CurrentUserId.Value;
+                    var myNetDebts = netDebts.Where(nd => nd.DebtorId == currentUserId).ToList();
+                    var currentUserDetails = Model.UserDebts.FirstOrDefault(u => u.UserId == currentUserId);
 
-                        if (remainingDebtDetails.Any())
+                    foreach (var debt in myNetDebts)
+                    {
+                        var myDebtDetails = currentUserDetails?.DebtDetails
+                            .Where(d => d.CreditorId == debt.CreditorId && d.RemainingAmount > 0)
+                            .OrderBy(d => d.ExpenseDate)
+                            .ToList() ?? new List<QuanLyAnTrua.Models.ViewModels.DebtDetail>();
+
+                        if (myDebtDetails.Any())
                         {
-                            var creditorGroups = remainingDebtDetails
-                                .GroupBy(d => d.CreditorId)
-                                .ToList();
-                            
-                            foreach (var group in creditorGroups)
+                            usersWithDebtsToShow.Add(new
                             {
-                                var creditorId = group.Key;
-                                var creditor = Model.UserDebts.FirstOrDefault(u => u.UserId == creditorId);
-                                if (creditor != null)
+                                UserId = debt.DebtorId,
+                                UserName = debt.DebtorName,
+                                AvatarPath = debt.DebtorAvatarPath,
+                                Creditor = new
                                 {
-                                    // Tính tổng số tiền còn nợ (RemainingAmount)
-                                    var totalMyDebt = group.Sum(d => d.RemainingAmount);
-                                    var myDebtDetails = group.ToList();
-                                    
-                                    if (totalMyDebt > 0)
-                                    {
-                                        usersWithDebtsToShow.Add(new
-                                        {
-                                            UserId = userDebt.UserId,
-                                            UserName = userDebt.UserName,
-                                            AvatarPath = userDebt.AvatarPath,
-                                            Creditor = new
-                                            {
-                                                CreditorId = creditorId,
-                                                CreditorName = creditor.UserName,
-                                                BankName = creditor.BankName,
-                                                BankAccount = creditor.BankAccount,
-                                                AccountHolderName = creditor.AccountHolderName
-                                            },
-                                            TotalMyDebt = totalMyDebt,
-                                            MyDebtDetails = myDebtDetails
-                                        });
-                                    }
-                                }
-                            }
+                                    CreditorId = debt.CreditorId,
+                                    CreditorName = debt.CreditorName,
+                                    BankName = debt.CreditorBankName,
+                                    BankAccount = debt.CreditorBankAccount,
+                                    AccountHolderName = debt.CreditorAccountHolderName,
+                                    AvatarPath = debt.CreditorAvatarPath
+                                },
+                                TotalMyDebt = debt.Amount,
+                                MyDebtDetails = myDebtDetails
+                            });
                         }
                     }
                 }
                 else if (reportType == "Group")
                 {
-                    // Hiển thị nợ của tất cả users trong nhóm - chỉ các khoản nợ còn lại
-                    foreach (var userDebt in Model.UserDebts.Where(u => u.DebtDetails.Any(d => d.RemainingAmount > 0)))
+                    foreach (var debt in netDebts)
                     {
-                        // Chỉ lấy các khoản nợ còn lại (RemainingAmount > 0)
-                        var remainingDebtDetails = userDebt.DebtDetails
-                            .Where(d => d.RemainingAmount > 0)
-                            .ToList();
+                        var debtorDetails = Model.UserDebts.FirstOrDefault(u => u.UserId == debt.DebtorId);
+                        var myDebtDetails = debtorDetails?.DebtDetails
+                            .Where(d => d.CreditorId == debt.CreditorId && d.RemainingAmount > 0)
+                            .OrderBy(d => d.ExpenseDate)
+                            .ToList() ?? new List<QuanLyAnTrua.Models.ViewModels.DebtDetail>();
 
-                        if (remainingDebtDetails.Any())
+                        if (myDebtDetails.Any())
                         {
-                            var creditorGroups = remainingDebtDetails
-                                .GroupBy(d => d.CreditorId)
-                                .ToList();
-                            
-                            foreach (var group in creditorGroups)
+                            usersWithDebtsToShow.Add(new
                             {
-                                var creditorId = group.Key;
-                                var creditor = Model.UserDebts.FirstOrDefault(u => u.UserId == creditorId);
-                                if (creditor != null)
+                                UserId = debt.DebtorId,
+                                UserName = debt.DebtorName,
+                                AvatarPath = debt.DebtorAvatarPath,
+                                Creditor = new
                                 {
-                                    // Tính tổng số tiền còn nợ (RemainingAmount)
-                                    var totalMyDebt = group.Sum(d => d.RemainingAmount);
-                                    var myDebtDetails = group.ToList();
-                                    
-                                    if (totalMyDebt > 0)
-                                    {
-                                        usersWithDebtsToShow.Add(new
-                                        {
-                                            UserId = userDebt.UserId,
-                                            UserName = userDebt.UserName,
-                                            AvatarPath = userDebt.AvatarPath,
-                                            Creditor = new
-                                            {
-                                                CreditorId = creditorId,
-                                                CreditorName = creditor.UserName,
-                                                BankName = creditor.BankName,
-                                                BankAccount = creditor.BankAccount,
-                                                AccountHolderName = creditor.AccountHolderName
-                                            },
-                                            TotalMyDebt = totalMyDebt,
-                                            MyDebtDetails = myDebtDetails
-                                        });
-                                    }
-                                }
-                            }
+                                    CreditorId = debt.CreditorId,
+                                    CreditorName = debt.CreditorName,
+                                    BankName = debt.CreditorBankName,
+                                    BankAccount = debt.CreditorBankAccount,
+                                    AccountHolderName = debt.CreditorAccountHolderName,
+                                    AvatarPath = debt.CreditorAvatarPath
+                                },
+                                TotalMyDebt = debt.Amount,
+                                MyDebtDetails = myDebtDetails
+                            });
                         }
                     }
                 }
-                
-                // Nhóm theo user để hiển thị
+
                 var groupedByUser = usersWithDebtsToShow.GroupBy(u => u.UserId).ToList();
             }
             

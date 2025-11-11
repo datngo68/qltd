@@ -11,6 +11,7 @@ namespace QuanLyAnTrua.Models.ViewModels
         public List<UserDebtDetail> UserDebts { get; set; } = new List<UserDebtDetail>();
         public List<ExpenseDetail> Expenses { get; set; } = new List<ExpenseDetail>();
         public List<CreditorSummary> CreditorSummaries { get; set; } = new List<CreditorSummary>(); // Tổng hợp nợ theo người được nợ
+        public List<NetDebtSummary> NetDebts { get; set; } = new List<NetDebtSummary>(); // Danh sách nợ thuần giữa các cặp người dùng
         public int? CurrentUserId { get; set; } // ID của người đang xem (để hiển thị "Bạn cần trả cho")
     }
 
@@ -71,6 +72,20 @@ namespace QuanLyAnTrua.Models.ViewModels
         public string? BankName { get; set; }
         public string? BankAccount { get; set; }
         public string? AccountHolderName { get; set; }
+    }
+
+    public class NetDebtSummary
+    {
+        public int DebtorId { get; set; }
+        public string DebtorName { get; set; } = string.Empty;
+        public string? DebtorAvatarPath { get; set; }
+        public int CreditorId { get; set; }
+        public string CreditorName { get; set; } = string.Empty;
+        public string? CreditorAvatarPath { get; set; }
+        public string? CreditorBankName { get; set; }
+        public string? CreditorBankAccount { get; set; }
+        public string? CreditorAccountHolderName { get; set; }
+        public decimal Amount { get; set; }
     }
 
     public class ExpenseDetail
