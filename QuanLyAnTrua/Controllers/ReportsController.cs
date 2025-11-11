@@ -1295,7 +1295,7 @@ namespace QuanLyAnTrua.Controllers
                 CurrentUserId = userId
             };
         }
-
+        //Trước commit này là cái thêm phần chi phí cho từng người
         /// <summary>
         /// Lấy báo cáo cho PublicView: chi phí chỉ trong tháng, nợ và thanh toán từ tất cả các tháng
         /// </summary>
