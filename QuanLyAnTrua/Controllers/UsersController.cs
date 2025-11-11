@@ -11,11 +11,13 @@ namespace QuanLyAnTrua.Controllers
     {
         private readonly ApplicationDbContext _context;
         private readonly IConfiguration _configuration;
+        private readonly IWebHostEnvironment _webHostEnvironment;
 
-        public UsersController(ApplicationDbContext context, IConfiguration configuration)
+        public UsersController(ApplicationDbContext context, IConfiguration configuration, IWebHostEnvironment webHostEnvironment)
         {
             _context = context;
             _configuration = configuration;
+            _webHostEnvironment = webHostEnvironment;
         }
 
         // GET: Users
@@ -324,7 +326,7 @@ namespace QuanLyAnTrua.Controllers
         // POST: Users/Edit/5
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, [Bind("Id,Name,IsActive,CreatedAt,BankName,BankAccount,AccountHolderName,TelegramUserId")] User user, string? Username, string? NewPassword, int? GroupId, string? Role)
+        public async Task<IActionResult> Edit(int id, [Bind("Id,Name,IsActive,CreatedAt,BankName,BankAccount,AccountHolderName,TelegramUserId")] User user, string? Username, string? NewPassword, int? GroupId, string? Role, IFormFile? avatarFile)
         {
             if (id != user.Id)
             {
@@ -406,6 +408,16 @@ namespace QuanLyAnTrua.Controllers
                 }
             }
 
+            // Validate avatar file nếu có upload
+            if (avatarFile != null && avatarFile.Length > 0)
+            {
+                var (isValid, errorMessage) = AvatarHelper.ValidateAvatarFile(avatarFile, _configuration);
+                if (!isValid)
+                {
+                    ModelState.AddModelError("AvatarFile", errorMessage ?? "File ảnh không hợp lệ");
+                }
+            }
+
             if (ModelState.IsValid)
             {
                 try
@@ -416,6 +428,20 @@ namespace QuanLyAnTrua.Controllers
                     existingUser.BankAccount = user.BankAccount;
                     existingUser.AccountHolderName = user.AccountHolderName;
                     existingUser.TelegramUserId = user.TelegramUserId;
+
+                    // Xử lý upload avatar
+                    if (avatarFile != null && avatarFile.Length > 0)
+                    {
+                        // Xóa avatar cũ nếu có
+                        AvatarHelper.DeleteAvatar(existingUser.AvatarPath, _webHostEnvironment);
+
+                        // Lưu avatar mới
+                        var newAvatarPath = await AvatarHelper.SaveAvatar(avatarFile, id, _webHostEnvironment, _configuration);
+                        if (!string.IsNullOrEmpty(newAvatarPath))
+                        {
+                            existingUser.AvatarPath = newAvatarPath;
+                        }
+                    }
 
                     // Admin/SuperAdmin có thể cập nhật username (đã xử lý ở trên)
                     // Role đã được cập nhật ở trên (nếu hợp lệ)

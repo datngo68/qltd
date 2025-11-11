@@ -1087,8 +1087,10 @@ namespace QuanLyAnTrua.Controllers
                             {
                                 DebtorId = participant.UserId,
                                 DebtorName = participant.User.Name,
+                                DebtorAvatarPath = participant.User.AvatarPath,
                                 CreditorId = payer.Id,
                                 CreditorName = payer.Name,
+                                CreditorAvatarPath = payer.AvatarPath,
                                 Amount = amountPerPerson,
                                 RemainingAmount = amountPerPerson, // Ban đầu RemainingAmount = Amount
                                 ExpenseId = expense.Id,
@@ -1210,11 +1212,13 @@ namespace QuanLyAnTrua.Controllers
                             PaidDate = p.PaidDate,
                             Notes = p.Notes,
                             UserId = p.UserId,
-                            UserName = p.User.Name
+                            UserName = p.User.Name,
+                            AvatarPath = p.User.AvatarPath
                         }).ToList(),
                         BankName = user.BankName,
                         BankAccount = user.BankAccount,
-                        AccountHolderName = user.AccountHolderName
+                        AccountHolderName = user.AccountHolderName,
+                        AvatarPath = user.AvatarPath
                     });
                 }
             }
@@ -1225,7 +1229,9 @@ namespace QuanLyAnTrua.Controllers
                 Id = e.Id,
                 ExpenseDate = e.ExpenseDate,
                 Amount = e.Amount,
+                PayerId = e.PayerId,
                 PayerName = e.Payer.Name,
+                PayerAvatarPath = e.Payer.AvatarPath,
                 ParticipantNames = e.Participants.Select(p => p.User.Name).ToList(),
                 AmountPerPerson = 0, // Sẽ được tính lại trong view dựa trên custom amounts
                 Description = e.Description,
@@ -1235,7 +1241,9 @@ namespace QuanLyAnTrua.Controllers
                     .Where(p => p.Amount.HasValue)
                     .ToDictionary(p => p.UserId, p => p.Amount!.Value),
                 // Lưu mapping UserId -> UserName để dễ tra cứu trong view
-                ParticipantIdToName = e.Participants.ToDictionary(p => p.UserId, p => p.User.Name)
+                ParticipantIdToName = e.Participants.ToDictionary(p => p.UserId, p => p.User.Name),
+                // Lưu mapping UserId -> AvatarPath để hiển thị avatar
+                ParticipantIdToAvatarPath = e.Participants.ToDictionary(p => p.UserId, p => p.User.AvatarPath)
             }).ToList();
 
             // Tập hợp nợ theo người được nợ (CreditorSummary) - chỉ cho người đang xem
@@ -1390,8 +1398,10 @@ namespace QuanLyAnTrua.Controllers
                             {
                                 DebtorId = participant.UserId,
                                 DebtorName = participant.User.Name,
+                                DebtorAvatarPath = participant.User.AvatarPath,
                                 CreditorId = payer.Id,
                                 CreditorName = payer.Name,
+                                CreditorAvatarPath = payer.AvatarPath,
                                 Amount = amountPerPerson,
                                 RemainingAmount = amountPerPerson,
                                 ExpenseId = expense.Id,
@@ -1506,11 +1516,13 @@ namespace QuanLyAnTrua.Controllers
                             PaidDate = p.PaidDate,
                             Notes = p.Notes,
                             UserId = p.UserId,
-                            UserName = p.User.Name
+                            UserName = p.User.Name,
+                            AvatarPath = p.User.AvatarPath
                         }).ToList(),
                         BankName = user.BankName,
                         BankAccount = user.BankAccount,
-                        AccountHolderName = user.AccountHolderName
+                        AccountHolderName = user.AccountHolderName,
+                        AvatarPath = user.AvatarPath
                     });
                 }
             }
@@ -1521,7 +1533,9 @@ namespace QuanLyAnTrua.Controllers
                 Id = e.Id,
                 ExpenseDate = e.ExpenseDate,
                 Amount = e.Amount,
+                PayerId = e.PayerId,
                 PayerName = e.Payer.Name,
+                PayerAvatarPath = e.Payer.AvatarPath,
                 ParticipantNames = e.Participants.Select(p => p.User.Name).ToList(),
                 AmountPerPerson = 0, // Sẽ được tính lại trong view dựa trên custom amounts
                 Description = e.Description,
@@ -1530,7 +1544,9 @@ namespace QuanLyAnTrua.Controllers
                     .Where(p => p.Amount.HasValue)
                     .ToDictionary(p => p.UserId, p => p.Amount!.Value),
                 // Lưu mapping UserId -> UserName để dễ tra cứu trong view
-                ParticipantIdToName = e.Participants.ToDictionary(p => p.UserId, p => p.User.Name)
+                ParticipantIdToName = e.Participants.ToDictionary(p => p.UserId, p => p.User.Name),
+                // Lưu mapping UserId -> AvatarPath để hiển thị avatar
+                ParticipantIdToAvatarPath = e.Participants.ToDictionary(p => p.UserId, p => p.User.AvatarPath)
             }).ToList();
 
             // Tập hợp nợ theo người được nợ

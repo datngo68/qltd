@@ -11,10 +11,14 @@ namespace QuanLyAnTrua.Controllers
     public class AccountController : Controller
     {
         private readonly ApplicationDbContext _context;
+        private readonly IWebHostEnvironment _webHostEnvironment;
+        private readonly IConfiguration _configuration;
 
-        public AccountController(ApplicationDbContext context)
+        public AccountController(ApplicationDbContext context, IWebHostEnvironment webHostEnvironment, IConfiguration configuration)
         {
             _context = context;
+            _webHostEnvironment = webHostEnvironment;
+            _configuration = configuration;
         }
 
         // GET: Account/Login (no authorize for login)
@@ -167,7 +171,7 @@ namespace QuanLyAnTrua.Controllers
         // POST: Account/Profile
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Profile(int id, [Bind("Id,Name,BankName,BankAccount,AccountHolderName,TelegramUserId")] User user)
+        public async Task<IActionResult> Profile(int id, [Bind("Id,Name,BankName,BankAccount,AccountHolderName,TelegramUserId")] User user, IFormFile? avatarFile)
         {
             if (id != user.Id)
             {
@@ -178,6 +182,16 @@ namespace QuanLyAnTrua.Controllers
             if (userId != id)
             {
                 return Forbid();
+            }
+
+            // Validate avatar file nếu có upload
+            if (avatarFile != null && avatarFile.Length > 0)
+            {
+                var (isValid, errorMessage) = AvatarHelper.ValidateAvatarFile(avatarFile, _configuration);
+                if (!isValid)
+                {
+                    ModelState.AddModelError("AvatarFile", errorMessage ?? "File ảnh không hợp lệ");
+                }
             }
 
             if (ModelState.IsValid)
@@ -198,9 +212,23 @@ namespace QuanLyAnTrua.Controllers
                     existingUser.BankName = user.BankName;
                     existingUser.BankAccount = user.BankAccount;
                     existingUser.AccountHolderName = user.AccountHolderName;
-                    
+
                     // Cập nhật Telegram User ID
                     existingUser.TelegramUserId = user.TelegramUserId;
+
+                    // Xử lý upload avatar
+                    if (avatarFile != null && avatarFile.Length > 0)
+                    {
+                        // Xóa avatar cũ nếu có
+                        AvatarHelper.DeleteAvatar(existingUser.AvatarPath, _webHostEnvironment);
+
+                        // Lưu avatar mới
+                        var newAvatarPath = await AvatarHelper.SaveAvatar(avatarFile, id, _webHostEnvironment, _configuration);
+                        if (!string.IsNullOrEmpty(newAvatarPath))
+                        {
+                            existingUser.AvatarPath = newAvatarPath;
+                        }
+                    }
 
                     _context.Update(existingUser);
                     await _context.SaveChangesAsync();
@@ -308,6 +336,75 @@ namespace QuanLyAnTrua.Controllers
             }
 
             return View();
+        }
+
+        // GET: Account/GetAvatar
+        [AllowAnonymous]
+        public IActionResult GetAvatar(string? path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return NotFound();
+            }
+
+            try
+            {
+                // Decode path
+                var decodedPath = Uri.UnescapeDataString(path);
+
+                // Kiểm tra file có tồn tại không
+                if (!System.IO.File.Exists(decodedPath))
+                {
+                    return NotFound();
+                }
+
+                // Kiểm tra file có nằm trong thư mục được cấu hình không (bảo mật)
+                var configuredPath = _configuration.GetValue<string>("Avatar:UploadPath", "wwwroot/avatars") ?? "wwwroot/avatars";
+                bool isAbsolutePath = Path.IsPathRooted(configuredPath) ||
+                                      (configuredPath.Length >= 2 && configuredPath[1] == ':');
+
+                if (isAbsolutePath)
+                {
+                    // Nếu là đường dẫn tuyệt đối, kiểm tra file có nằm trong thư mục đó không
+                    var normalizedConfigPath = Path.GetFullPath(configuredPath);
+                    var normalizedFilePath = Path.GetFullPath(decodedPath);
+
+                    if (!normalizedFilePath.StartsWith(normalizedConfigPath, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return Forbid(); // File không nằm trong thư mục được phép
+                    }
+                }
+                else
+                {
+                    // Nếu là đường dẫn tương đối, kiểm tra trong wwwroot
+                    var fullConfigPath = Path.Combine(_webHostEnvironment.ContentRootPath, configuredPath);
+                    var normalizedConfigPath = Path.GetFullPath(fullConfigPath);
+                    var normalizedFilePath = Path.GetFullPath(decodedPath);
+
+                    if (!normalizedFilePath.StartsWith(normalizedConfigPath, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return Forbid();
+                    }
+                }
+
+                // Xác định content type
+                var extension = Path.GetExtension(decodedPath)?.ToLower() ?? "";
+                var contentType = extension switch
+                {
+                    ".jpg" or ".jpeg" => "image/jpeg",
+                    ".png" => "image/png",
+                    ".gif" => "image/gif",
+                    ".webp" => "image/webp",
+                    _ => "application/octet-stream"
+                };
+
+                // Trả về file
+                return PhysicalFile(decodedPath, contentType);
+            }
+            catch
+            {
+                return NotFound();
+            }
         }
 
         private bool UserExists(int id)

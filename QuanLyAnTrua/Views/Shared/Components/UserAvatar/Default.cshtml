@@ -1,0 +1,8 @@
+@{
+    var avatarUrl = ViewBag.AvatarUrl as string ?? "/images/default-avatar.png";
+    var fullName = ViewBag.FullName as string ?? "";
+}
+
+<img src="@avatarUrl" alt="Avatar" class="rounded-circle me-2" style="width: 32px; height: 32px; object-fit: cover;" />
+<span>@fullName</span>
+

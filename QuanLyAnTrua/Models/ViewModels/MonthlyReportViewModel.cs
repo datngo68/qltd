@@ -31,6 +31,8 @@ namespace QuanLyAnTrua.Models.ViewModels
         public string? BankName { get; set; }
         public string? BankAccount { get; set; }
         public string? AccountHolderName { get; set; }
+        // Avatar
+        public string? AvatarPath { get; set; }
     }
 
     public class PaymentDetail
@@ -41,14 +43,17 @@ namespace QuanLyAnTrua.Models.ViewModels
         public string? Notes { get; set; }
         public int UserId { get; set; }
         public string UserName { get; set; } = string.Empty; // Người đã thanh toán
+        public string? AvatarPath { get; set; }
     }
 
     public class DebtDetail
     {
         public int DebtorId { get; set; } // Người nợ
         public string DebtorName { get; set; } = string.Empty;
+        public string? DebtorAvatarPath { get; set; } // Avatar người nợ
         public int CreditorId { get; set; } // Người được nợ
         public string CreditorName { get; set; } = string.Empty;
+        public string? CreditorAvatarPath { get; set; } // Avatar người được nợ
         public decimal Amount { get; set; } // Số tiền nợ ban đầu
         public decimal RemainingAmount { get; set; } // Số tiền còn nợ sau khi trừ các khoản thanh toán
         public int ExpenseId { get; set; } // Từ expense nào
@@ -72,7 +77,9 @@ namespace QuanLyAnTrua.Models.ViewModels
     {
         public int Id { get; set; }
         public decimal Amount { get; set; }
+        public int PayerId { get; set; }
         public string PayerName { get; set; } = string.Empty;
+        public string? PayerAvatarPath { get; set; }
         public DateTime ExpenseDate { get; set; }
         public string? Description { get; set; }
         public List<string> ParticipantNames { get; set; } = new List<string>();
@@ -86,6 +93,10 @@ namespace QuanLyAnTrua.Models.ViewModels
         /// Dictionary mapping UserId -> UserName để dễ tra cứu trong view
         /// </summary>
         public Dictionary<int, string> ParticipantIdToName { get; set; } = new Dictionary<int, string>();
+        /// <summary>
+        /// Dictionary mapping UserId -> AvatarPath để hiển thị avatar
+        /// </summary>
+        public Dictionary<int, string?> ParticipantIdToAvatarPath { get; set; } = new Dictionary<int, string?>();
     }
 }
 

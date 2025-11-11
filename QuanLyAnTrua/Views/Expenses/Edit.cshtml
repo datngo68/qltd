@@ -1,4 +1,5 @@
 @model QuanLyAnTrua.Models.ViewModels.ExpenseViewModel
+@using QuanLyAnTrua.Helpers
 
 @{
     ViewData["Title"] = "Sửa chi phí";
@@ -186,7 +187,10 @@
                                         <div class="user-list-item__content">
                                             <div class="user-avatar-wrapper">
                                                 <div class="user-avatar">
-                                                    <i class="bi bi-person-circle"></i>
+                                                    <img src="@AvatarHelper.GetAvatarUrl(user.AvatarPath)" 
+                                                         alt="@user.Name" 
+                                                         class="user-avatar-img" 
+                                                         onerror="this.onerror=null; this.src='/images/default-avatar.svg';" />
                                                 </div>
                                                 @if (isChecked)
                                                 {
@@ -883,6 +887,16 @@
             justify-content: center;
             color: #6c757d;
             font-size: 2rem;
+            border-radius: 50%;
+            overflow: hidden;
+            background-color: #f8f9fa;
+        }
+
+        .user-avatar-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 50%;
         }
 
         .user-list-item.is-selected .user-avatar {
@@ -1065,6 +1079,12 @@
                 font-size: 1.75rem;
             }
 
+            .user-avatar-img {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+            }
+
             .user-name {
                 font-size: 0.9375rem;
             }
@@ -1120,6 +1140,12 @@
                 width: 36px;
                 height: 36px;
                 font-size: 1.5rem;
+            }
+
+            .user-avatar-img {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
             }
 
             .user-name {

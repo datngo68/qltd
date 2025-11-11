@@ -1,4 +1,5 @@
 @model QuanLyAnTrua.Models.User
+@using QuanLyAnTrua.Helpers
 
 @{
     ViewData["Title"] = "Thông tin tài khoản";
@@ -17,9 +18,27 @@
 
 <div class="row">
     <div class="col-12 col-md-6">
-        <form asp-action="Profile" method="post">
+        <form asp-action="Profile" method="post" enctype="multipart/form-data">
             <div asp-validation-summary="ModelOnly" class="text-danger"></div>
             <input type="hidden" asp-for="Id" />
+
+            <div class="mb-3">
+                <label class="form-label">
+                    <i class="bi bi-image"></i> Ảnh đại diện
+                </label>
+                <div class="d-flex align-items-center gap-3 mb-2">
+                    <img id="avatarPreview" src="@AvatarHelper.GetAvatarUrl(Model.AvatarPath)" 
+                         alt="Avatar" class="rounded-circle" style="width: 80px; height: 80px; object-fit: cover; border: 2px solid #dee2e6;" />
+                    <div class="flex-grow-1">
+                        <input type="file" name="avatarFile" id="avatarFile" accept="image/jpeg,image/jpg,image/png,image/gif,image/webp" class="form-control" />
+                        <small class="form-text text-muted">Chấp nhận: JPG, PNG, GIF, WEBP (tối đa 3MB)</small>
+                        @if (ViewData.ModelState["AvatarFile"]?.Errors?.Count > 0)
+                        {
+                            <span class="text-danger">@ViewData.ModelState["AvatarFile"].Errors[0].ErrorMessage</span>
+                        }
+                    </div>
+                </div>
+            </div>
 
             <div class="mb-3">
                 <label asp-for="Name" class="form-label">
@@ -135,6 +154,18 @@
                     searching: function () {
                         return "Đang tìm kiếm...";
                     }
+                }
+            });
+
+            // Preview avatar khi chọn file
+            $('#avatarFile').on('change', function(e) {
+                var file = e.target.files[0];
+                if (file) {
+                    var reader = new FileReader();
+                    reader.onload = function(e) {
+                        $('#avatarPreview').attr('src', e.target.result);
+                    };
+                    reader.readAsDataURL(file);
                 }
             });
         });

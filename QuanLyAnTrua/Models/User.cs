@@ -41,6 +41,9 @@ namespace QuanLyAnTrua.Models
         [Display(Name = "Telegram User ID")]
         public string? TelegramUserId { get; set; }
 
+        [Display(Name = "Ảnh đại diện")]
+        public string? AvatarPath { get; set; }
+
         // Navigation properties
         [ForeignKey("GroupId")]
         public virtual Group? Group { get; set; }

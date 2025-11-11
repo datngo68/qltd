@@ -1,5 +1,7 @@
 @model QuanLyAnTrua.Models.ViewModels.MonthlyReportViewModel
 @using QuanLyAnTrua.Helpers
+@using System.Linq
+@using System.Collections.Generic
 
 @{
     ViewData["Title"] = "Quản lý thanh toán";
@@ -113,7 +115,11 @@ Model.CurrentUserId.Value)))
                 <div class="col-12 col-md-6 mb-3">
                     <div class="card border-warning">
                         <div class="card-header bg-warning text-dark">
-                            <h5 class="mb-0"><i class="bi bi-person-check"></i> @myDebt.Creditor.CreditorName</h5>
+                            <h5 class="mb-0 d-flex align-items-center gap-2">
+                                <img src="@AvatarHelper.GetAvatarUrl(Model.UserDebts.FirstOrDefault(u => u.UserId == myDebt.Creditor.CreditorId)?.AvatarPath)"
+                                    alt="Avatar" class="rounded-circle" style="width: 32px; height: 32px; object-fit: cover;" />
+                                <i class="bi bi-person-check"></i> @myDebt.Creditor.CreditorName
+                            </h5>
                         </div>
                         <div class="card-body">
                             <div class="row">
@@ -264,26 +270,32 @@ Model.CurrentUserId.Value)))
             {
                 <tr>
                     <td>
-                        <strong>@debt.UserName</strong>
-                        @if (!string.IsNullOrEmpty(debt.BankName) || !string.IsNullOrEmpty(debt.BankAccount))
-                        {
-                            <br />
-                            <small class="text-muted">
-                                <i class="bi bi-bank"></i>
-                                @if (!string.IsNullOrEmpty(debt.BankName))
+                        <div class="d-flex align-items-center gap-2">
+                            <img src="@AvatarHelper.GetAvatarUrl(debt.AvatarPath)" alt="Avatar" class="rounded-circle"
+                                style="width: 32px; height: 32px; object-fit: cover;" />
+                            <div>
+                                <strong>@debt.UserName</strong>
+                                @if (!string.IsNullOrEmpty(debt.BankName) || !string.IsNullOrEmpty(debt.BankAccount))
                                 {
-                                    <span>@debt.BankName</span>
+                                    <br />
+                                    <small class="text-muted">
+                                        <i class="bi bi-bank"></i>
+                                        @if (!string.IsNullOrEmpty(debt.BankName))
+                                        {
+                                            <span>@debt.BankName</span>
+                                        }
+                                        @if (!string.IsNullOrEmpty(debt.BankAccount))
+                                        {
+                                            <span> - @debt.BankAccount</span>
+                                        }
+                                        @if (!string.IsNullOrEmpty(debt.AccountHolderName))
+                                        {
+                                            <span> - @debt.AccountHolderName</span>
+                                        }
+                                    </small>
                                 }
-                                @if (!string.IsNullOrEmpty(debt.BankAccount))
-                                {
-                                    <span> - @debt.BankAccount</span>
-                                }
-                                @if (!string.IsNullOrEmpty(debt.AccountHolderName))
-                                {
-                                    <span> - @debt.AccountHolderName</span>
-                                }
-                            </small>
-                        }
+                            </div>
+                        </div>
                     </td>
 
                     <td>@debt.TotalAmount.ToString("N0") đ</td>
@@ -369,9 +381,21 @@ Model.CurrentUserId.Value)))
                     @foreach (var debtDetail in debt.DebtDetails.Where(d => d.RemainingAmount > 0))
                     {
                         <tr>
-                            <td><strong>@debtDetail.DebtorName</strong></td>
+                            <td>
+                                <div class="d-flex align-items-center gap-2">
+                                    <img src="@AvatarHelper.GetAvatarUrl(debtDetail.DebtorAvatarPath)" alt="Avatar"
+                                        class="rounded-circle" style="width: 32px; height: 32px; object-fit: cover;" />
+                                    <strong>@debtDetail.DebtorName</strong>
+                                </div>
+                            </td>
                             <td><i class="bi bi-arrow-right text-danger"></i></td>
-                            <td><strong>@debtDetail.CreditorName</strong></td>
+                            <td>
+                                <div class="d-flex align-items-center gap-2">
+                                    <img src="@AvatarHelper.GetAvatarUrl(debtDetail.CreditorAvatarPath)" alt="Avatar"
+                                        class="rounded-circle" style="width: 32px; height: 32px; object-fit: cover;" />
+                                    <strong>@debtDetail.CreditorName</strong>
+                                </div>
+                            </td>
                             <td>@debtDetail.Amount.ToString("N0") đ</td>
                             <td class="text-danger fw-bold">@debtDetail.RemainingAmount.ToString("N0") đ</td>
                             <td>@debtDetail.ExpenseDate.ToString("dd/MM/yyyy")</td>
@@ -404,7 +428,13 @@ Model.CurrentUserId.Value)))
                     @foreach (var payment in debt.Payments.OrderByDescending(p => p.PaidDate))
                     {
                         <tr>
-                            <td>@payment.UserName</td>
+                            <td>
+                                <div class="d-flex align-items-center gap-2">
+                                    <img src="@AvatarHelper.GetAvatarUrl(payment.AvatarPath)" alt="Avatar" class="rounded-circle"
+                                        style="width: 28px; height: 28px; object-fit: cover;" />
+                                    <span>@payment.UserName</span>
+                                </div>
+                            </td>
                             <td>@payment.PaidAmount.ToString("N0") đ</td>
                             <td>@payment.PaidDate.ToString("dd/MM/yyyy")</td>
                             <td>@(payment.Notes ?? "-")</td>
@@ -440,8 +470,7 @@ Model.CurrentUserId.Value)))
                 <th>Ngày</th>
                 <th>Số tiền</th>
                 <th>Người chi</th>
-                <th>Người ăn</th>
-                <th>Số tiền/người</th>
+                <th>Người ăn &amp; số tiền</th>
                 <th>Mô tả</th>
             </tr>
         </thead>
@@ -451,9 +480,102 @@ Model.CurrentUserId.Value)))
                 <tr>
                     <td>@expense.ExpenseDate.ToString("dd/MM/yyyy")</td>
                     <td>@expense.Amount.ToString("N0") đ</td>
-                    <td>@expense.PayerName</td>
-                    <td>@string.Join(", ", expense.ParticipantNames)</td>
-                    <td>@expense.AmountPerPerson.ToString("N0") đ</td>
+                    <td>
+                        <div class="d-flex align-items-center gap-2">
+                            <img src="@AvatarHelper.GetAvatarUrl(expense.PayerAvatarPath)" alt="Avatar"
+                                class="rounded-circle" style="width: 32px; height: 32px; object-fit: cover;" />
+                            <span>@expense.PayerName</span>
+                        </div>
+                    </td>
+                    <td>
+                        @{
+                            var rawParticipantNames = expense.ParticipantNames ?? new List<string>();
+                            var participantIdToName = expense.ParticipantIdToName ?? new Dictionary<int, string>();
+                            var participantIdToAvatar = expense.ParticipantIdToAvatarPath ?? new Dictionary<int, string?>();
+
+                            var participantInfos = participantIdToName
+                            .Select(kvp =>
+                            {
+                                participantIdToAvatar.TryGetValue(kvp.Key, out var avatarPath);
+                                return (Key: kvp.Key, Name: kvp.Value, Avatar: avatarPath);
+                            })
+                            .ToList();
+
+                            if (!participantInfos.Any() && rawParticipantNames.Any())
+                            {
+                                var tempIndex = -1;
+                                foreach (var name in rawParticipantNames)
+                                {
+                                    participantInfos.Add((Key: tempIndex, Name: name, Avatar: (string?)null));
+                                    tempIndex--;
+                                }
+                            }
+
+                            var participantAmounts = new Dictionary<int, decimal>();
+                            if (expense.ParticipantAmounts != null && expense.ParticipantAmounts.Any())
+                            {
+                                foreach (var kvp in expense.ParticipantAmounts)
+                                {
+                                    participantAmounts[kvp.Key] = Math.Round(kvp.Value, 2);
+                                    if (!participantInfos.Any(pi => pi.Key == kvp.Key))
+                                    {
+                                        participantIdToAvatar.TryGetValue(kvp.Key, out var avatarPath);
+                                        participantInfos.Add((Key: kvp.Key, Name: $"Người dùng {kvp.Key}", Avatar: avatarPath));
+                                    }
+                                }
+
+                                var remainingIds = participantInfos
+                                .Where(pi => !participantAmounts.ContainsKey(pi.Key))
+                                .Select(pi => pi.Key)
+                                .ToList();
+
+                                if (remainingIds.Any())
+                                {
+                                    var remainingAmount = expense.Amount - participantAmounts.Sum(pa => pa.Value);
+                                    var equalAmount = remainingIds.Count > 0
+                                    ? Math.Round(remainingAmount / remainingIds.Count, 2)
+                                    : 0m;
+
+                                    foreach (var id in remainingIds)
+                                    {
+                                        participantAmounts[id] = equalAmount;
+                                    }
+                                }
+                            }
+                            else if (participantInfos.Any())
+                            {
+                                var equalAmount = participantInfos.Count > 0
+                                ? Math.Round(expense.Amount / participantInfos.Count, 2)
+                                : 0m;
+
+                                foreach (var info in participantInfos)
+                                {
+                                    participantAmounts[info.Key] = equalAmount;
+                                }
+                            }
+
+                            if (participantInfos.Any())
+                            {
+                                <div class="participant-chip-list">
+                                    @foreach (var info in participantInfos)
+                                    {
+                                        var amountValue = participantAmounts.TryGetValue(info.Key, out var value)
+                                        ? value
+                                        : 0m;
+                                        <div class="participant-chip participant-chip--amount">
+                                            <img src="@AvatarHelper.GetAvatarUrl(info.Avatar)" alt="Avatar" />
+                                            <span>@info.Name</span>
+                                            <span class="participant-amount-value">@amountValue.ToString("N0") đ</span>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <span>-</span>
+                            }
+                        }
+                    </td>
                     <td>@(expense.Description ?? "-")</td>
                 </tr>
             }
@@ -481,6 +603,49 @@ Model.CurrentUserId.Value)))
         </div>
     </div>
 </div>
+
+<style>
+    .participant-chip-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+    }
+
+    .participant-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.2rem 0.55rem;
+        border-radius: 999px;
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        font-size: 0.85rem;
+        line-height: 1.2;
+    }
+
+    .participant-chip img {
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        object-fit: cover;
+    }
+
+    .participant-chip--amount {
+        background-color: #e8f3ff;
+        border-color: #d0e3ff;
+    }
+
+    .participant-chip--amount img {
+        width: 20px;
+        height: 20px;
+    }
+
+    .participant-amount-value {
+        font-weight: 600;
+        color: #0d6efd;
+        margin-left: 0.15rem;
+    }
+</style>
 
 @section Scripts {
     <script>

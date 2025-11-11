@@ -1,4 +1,5 @@
 @model IEnumerable<QuanLyAnTrua.Models.User>
+@using QuanLyAnTrua.Helpers
 
 @{
     ViewData["Title"] = "Quản lý người dùng";
@@ -32,6 +33,7 @@
     <table id="usersTable" class="table table-striped table-hover" style="min-width: 800px;">
         <thead class="table-light">
             <tr>
+                <th>Ảnh đại diện</th>
                 <th>@Html.DisplayNameFor(model => model.Name)</th>
                 <th>Tên đăng nhập</th>
                 <th>Tài khoản ngân hàng</th>
@@ -45,6 +47,9 @@
             @foreach (var item in Model)
             {
                 <tr>
+                    <td>
+                        <img src="@AvatarHelper.GetAvatarUrl(item.AvatarPath)" alt="Avatar" class="rounded-circle" style="width: 40px; height: 40px; object-fit: cover;" />
+                    </td>
                     <td>@Html.DisplayFor(modelItem => item.Name)</td>
                     <td>@(item.Username ?? "-")</td>
                     <td>
@@ -144,9 +149,9 @@
                     url: 'https://cdn.datatables.net/plug-ins/1.13.7/i18n/vi.json'
                 },
                 pageLength: 25,
-                order: [[5, 'desc']], // Sắp xếp theo ngày tạo giảm dần
+                order: [[6, 'desc']], // Sắp xếp theo ngày tạo giảm dần
                 columnDefs: [
-                    { orderable: false, targets: 6 } // Tắt sắp xếp cho cột Thao tác
+                    { orderable: false, targets: [0, 7] } // Tắt sắp xếp cho cột Avatar và Thao tác
                 ]
             });
         });

@@ -1,4 +1,5 @@
 @model IEnumerable<QuanLyAnTrua.Models.Expense>
+@using QuanLyAnTrua.Helpers
 
 @{
     ViewData["Title"] = "Danh sách chi phí";
@@ -90,7 +91,12 @@
                 <tr>
                     <td>@item.ExpenseDate.ToString("dd/MM/yyyy")</td>
                     <td>@item.Amount.ToString("N0") đ</td>
-                    <td>@item.Payer.Name</td>
+                    <td>
+                        <div class="d-flex align-items-center gap-2">
+                            <img src="@AvatarHelper.GetAvatarUrl(item.Payer?.AvatarPath)" alt="Avatar" class="rounded-circle" style="width: 32px; height: 32px; object-fit: cover;" />
+                            <span>@item.Payer.Name</span>
+                        </div>
+                    </td>
                     <td class="text-center">
                         <span class="badge bg-primary">@participantCount</span>
                     </td>
@@ -100,15 +106,24 @@
                             <div>
                                 @foreach (var participant in item.Participants.OrderBy(p => p.User.Name))
                                 {
-                                    <div class="small">
-                                        @participant.User.Name: <strong class="text-primary">@(participant.Amount?.ToString("N0") ?? amountPerPerson.ToString("N0")) đ</strong>
+                                    <div class="small d-flex align-items-center gap-1 mb-1">
+                                        <img src="@AvatarHelper.GetAvatarUrl(participant.User?.AvatarPath)" alt="Avatar" class="rounded-circle" style="width: 20px; height: 20px; object-fit: cover;" />
+                                        <span>@participant.User.Name: <strong class="text-primary">@(participant.Amount?.ToString("N0") ?? amountPerPerson.ToString("N0")) đ</strong></span>
                                     </div>
                                 }
                             </div>
                         }
                         else
                         {
-                            @string.Join(", ", item.Participants.Select(p => p.User.Name))
+                            <div class="d-flex flex-wrap align-items-center gap-2">
+                                @foreach (var participant in item.Participants.OrderBy(p => p.User.Name))
+                                {
+                                    <div class="d-flex align-items-center gap-1">
+                                        <img src="@AvatarHelper.GetAvatarUrl(participant.User?.AvatarPath)" alt="Avatar" class="rounded-circle" style="width: 24px; height: 24px; object-fit: cover;" />
+                                        <span>@participant.User.Name</span>
+                                    </div>
+                                }
+                            </div>
                         }
                     </td>
                     <td>
