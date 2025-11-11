@@ -1052,14 +1052,29 @@ namespace QuanLyAnTrua.Controllers
             {
                 var payer = expense.Payer;
                 var participantCount = expense.Participants.Count;
-                // Làm tròn đến 2 chữ số thập phân để tránh sai số làm tròn
-                var amountPerPerson = participantCount > 0 ? Math.Round(expense.Amount / participantCount, 2) : 0;
 
                 foreach (var participant in expense.Participants)
                 {
                     // Nếu participant không phải payer thì nợ payer
                     if (participant.UserId != payer.Id)
                     {
+                        // Tính số tiền: nếu có Amount trong ExpenseParticipant thì dùng giá trị đó, nếu không thì chia đều
+                        decimal amountPerPerson;
+                        if (participant.Amount.HasValue)
+                        {
+                            amountPerPerson = participant.Amount.Value;
+                        }
+                        else
+                        {
+                            // Chia đều cho tất cả participants (chỉ tính những người không có Amount)
+                            var participantsWithoutAmount = expense.Participants.Where(p => !p.Amount.HasValue).ToList();
+                            var totalCustomAmount = expense.Participants.Where(p => p.Amount.HasValue).Sum(p => p.Amount!.Value);
+                            var remainingAmount = expense.Amount - totalCustomAmount;
+                            amountPerPerson = participantsWithoutAmount.Count > 0
+                                ? Math.Round(remainingAmount / participantsWithoutAmount.Count, 2)
+                                : 0;
+                        }
+
                         // Kiểm tra xem đã có debt detail này chưa
                         var existingDebt = allDebtDetails.FirstOrDefault(d =>
                             d.DebtorId == participant.UserId &&
@@ -1096,11 +1111,28 @@ namespace QuanLyAnTrua.Controllers
                 // Tính tổng phải trả (khi là participant)
                 foreach (var expense in expenses)
                 {
-                    var participantCount = expense.Participants.Count;
-                    if (participantCount > 0 && expense.Participants.Any(ep => ep.UserId == user.Id))
+                    if (expense.Participants.Any(ep => ep.UserId == user.Id))
                     {
-                        // Làm tròn đến 2 chữ số thập phân để tránh sai số làm tròn
-                        totalAmount += Math.Round(expense.Amount / participantCount, 2);
+                        var participant = expense.Participants.FirstOrDefault(ep => ep.UserId == user.Id);
+                        if (participant != null)
+                        {
+                            if (participant.Amount.HasValue)
+                            {
+                                // Dùng số tiền cụ thể từ ExpenseParticipant
+                                totalAmount += participant.Amount.Value;
+                            }
+                            else
+                            {
+                                // Chia đều: tính số tiền còn lại sau khi trừ các custom amounts
+                                var participantsWithoutAmount = expense.Participants.Where(p => !p.Amount.HasValue).ToList();
+                                var totalCustomAmount = expense.Participants.Where(p => p.Amount.HasValue).Sum(p => p.Amount!.Value);
+                                var remainingAmount = expense.Amount - totalCustomAmount;
+                                var amountPerPerson = participantsWithoutAmount.Count > 0
+                                    ? Math.Round(remainingAmount / participantsWithoutAmount.Count, 2)
+                                    : 0;
+                                totalAmount += amountPerPerson;
+                            }
+                        }
                     }
                 }
 
@@ -1190,12 +1222,20 @@ namespace QuanLyAnTrua.Controllers
             // Prepare expense details
             var expenseDetails = expenses.Select(e => new ExpenseDetail
             {
+                Id = e.Id,
                 ExpenseDate = e.ExpenseDate,
                 Amount = e.Amount,
                 PayerName = e.Payer.Name,
                 ParticipantNames = e.Participants.Select(p => p.User.Name).ToList(),
-                AmountPerPerson = e.Participants.Count > 0 ? e.Amount / e.Participants.Count : 0,
-                Description = e.Description
+                AmountPerPerson = 0, // Sẽ được tính lại trong view dựa trên custom amounts
+                Description = e.Description,
+                // Lưu thông tin về custom amounts để hiển thị trong view
+                // Dictionary: UserId -> Amount
+                ParticipantAmounts = e.Participants
+                    .Where(p => p.Amount.HasValue)
+                    .ToDictionary(p => p.UserId, p => p.Amount!.Value),
+                // Lưu mapping UserId -> UserName để dễ tra cứu trong view
+                ParticipantIdToName = e.Participants.ToDictionary(p => p.UserId, p => p.User.Name)
             }).ToList();
 
             // Tập hợp nợ theo người được nợ (CreditorSummary) - chỉ cho người đang xem
@@ -1317,12 +1357,28 @@ namespace QuanLyAnTrua.Controllers
             {
                 var payer = expense.Payer;
                 var participantCount = expense.Participants.Count;
-                var amountPerPerson = participantCount > 0 ? Math.Round(expense.Amount / participantCount, 2) : 0;
 
                 foreach (var participant in expense.Participants)
                 {
                     if (participant.UserId != payer.Id)
                     {
+                        // Tính số tiền: nếu có Amount trong ExpenseParticipant thì dùng giá trị đó, nếu không thì chia đều
+                        decimal amountPerPerson;
+                        if (participant.Amount.HasValue)
+                        {
+                            amountPerPerson = participant.Amount.Value;
+                        }
+                        else
+                        {
+                            // Chia đều cho tất cả participants (chỉ tính những người không có Amount)
+                            var participantsWithoutAmount = expense.Participants.Where(p => !p.Amount.HasValue).ToList();
+                            var totalCustomAmount = expense.Participants.Where(p => p.Amount.HasValue).Sum(p => p.Amount!.Value);
+                            var remainingAmount = expense.Amount - totalCustomAmount;
+                            amountPerPerson = participantsWithoutAmount.Count > 0
+                                ? Math.Round(remainingAmount / participantsWithoutAmount.Count, 2)
+                                : 0;
+                        }
+
                         var existingDebt = allDebtDetails.FirstOrDefault(d =>
                             d.DebtorId == participant.UserId &&
                             d.CreditorId == payer.Id &&
@@ -1358,10 +1414,28 @@ namespace QuanLyAnTrua.Controllers
                 // Tính tổng phải trả từ TẤT CẢ chi phí
                 foreach (var expense in allExpensesForDebt)
                 {
-                    var participantCount = expense.Participants.Count;
-                    if (participantCount > 0 && expense.Participants.Any(ep => ep.UserId == user.Id))
+                    if (expense.Participants.Any(ep => ep.UserId == user.Id))
                     {
-                        totalAmount += Math.Round(expense.Amount / participantCount, 2);
+                        var participant = expense.Participants.FirstOrDefault(ep => ep.UserId == user.Id);
+                        if (participant != null)
+                        {
+                            if (participant.Amount.HasValue)
+                            {
+                                // Dùng số tiền cụ thể từ ExpenseParticipant
+                                totalAmount += participant.Amount.Value;
+                            }
+                            else
+                            {
+                                // Chia đều: tính số tiền còn lại sau khi trừ các custom amounts
+                                var participantsWithoutAmount = expense.Participants.Where(p => !p.Amount.HasValue).ToList();
+                                var totalCustomAmount = expense.Participants.Where(p => p.Amount.HasValue).Sum(p => p.Amount!.Value);
+                                var remainingAmount = expense.Amount - totalCustomAmount;
+                                var amountPerPerson = participantsWithoutAmount.Count > 0
+                                    ? Math.Round(remainingAmount / participantsWithoutAmount.Count, 2)
+                                    : 0;
+                                totalAmount += amountPerPerson;
+                            }
+                        }
                     }
                 }
 
@@ -1444,12 +1518,19 @@ namespace QuanLyAnTrua.Controllers
             // Prepare expense details (chỉ chi phí trong tháng)
             var expenseDetails = expenses.Select(e => new ExpenseDetail
             {
+                Id = e.Id,
                 ExpenseDate = e.ExpenseDate,
                 Amount = e.Amount,
                 PayerName = e.Payer.Name,
                 ParticipantNames = e.Participants.Select(p => p.User.Name).ToList(),
-                AmountPerPerson = e.Participants.Count > 0 ? e.Amount / e.Participants.Count : 0,
-                Description = e.Description
+                AmountPerPerson = 0, // Sẽ được tính lại trong view dựa trên custom amounts
+                Description = e.Description,
+                // Lưu thông tin về custom amounts để hiển thị trong view
+                ParticipantAmounts = e.Participants
+                    .Where(p => p.Amount.HasValue)
+                    .ToDictionary(p => p.UserId, p => p.Amount!.Value),
+                // Lưu mapping UserId -> UserName để dễ tra cứu trong view
+                ParticipantIdToName = e.Participants.ToDictionary(p => p.UserId, p => p.User.Name)
             }).ToList();
 
             // Tập hợp nợ theo người được nợ

@@ -45,8 +45,25 @@
                 <div class="card-body">
                     <div class="mb-3">
                         <label asp-for="Amount" class="form-label"></label>
-                        <input asp-for="Amount" class="form-control" type="number" step="0.01" min="0.01" />
+                        <input asp-for="Amount" class="form-control" type="number" step="0.01" min="0.01" id="expenseAmount" />
                         <span asp-validation-for="Amount" class="text-danger"></span>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Cách chia chi phí</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="SplitType" id="splitTypeEqual" value="0" checked="@(Model.SplitType == QuanLyAnTrua.Models.ViewModels.SplitType.Equal)" />
+                            <label class="form-check-label" for="splitTypeEqual">
+                                Chia đều cho tất cả người tham gia
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="SplitType" id="splitTypeCustom" value="1" checked="@(Model.SplitType == QuanLyAnTrua.Models.ViewModels.SplitType.Custom)" />
+                            <label class="form-check-label" for="splitTypeCustom">
+                                Nhập số tiền từng người
+                            </label>
+                        </div>
+                        <input type="hidden" asp-for="SplitType" id="splitTypeHidden" />
                     </div>
 
                     <div class="mb-3">
@@ -170,6 +187,9 @@
                                 @foreach (var user in Model.AllUsers)
                                 {
                                     var isChecked = Model.ParticipantIds != null && Model.ParticipantIds.Contains(user.Id);
+                                    var userAmount = Model.ParticipantAmounts != null && Model.ParticipantAmounts.ContainsKey(user.Id) 
+                                        ? Model.ParticipantAmounts[user.Id] 
+                                        : 0;
                                     <div class="user-list-item user-item @(isChecked ? "is-selected" : "")" 
                                          data-user-id="@user.Id" 
                                          data-user-name="@user.Name.ToLower()">
@@ -187,6 +207,25 @@
                                             </div>
                                             <div class="user-info">
                                                 <div class="user-name">@user.Name</div>
+                                                @* Input số tiền khi chọn Custom split *@
+                                                <div class="participant-amount-input mt-2" style="display: none;" data-participant-amount-container>
+                                                    <div class="input-group input-group-sm">
+                                                        <span class="input-group-text">₫</span>
+                                                        <input type="number" 
+                                                               class="form-control participant-amount-field" 
+                                                               step="0.01" 
+                                                               min="0" 
+                                                               data-user-id="@user.Id"
+                                                               value="@(userAmount > 0 ? userAmount.ToString("F2") : "")"
+                                                               placeholder="0" />
+                                                    </div>
+                                                    @* Hidden field cho ParticipantAmounts - luôn tồn tại trong form *@
+                                                    <input type="hidden" 
+                                                           name="ParticipantAmounts[@user.Id]" 
+                                                           id="hiddenParticipantAmount_@user.Id" 
+                                                           value="@(userAmount > 0 ? userAmount.ToString("F2") : "")" 
+                                                           data-participant-amount-hidden />
+                                                </div>
                                             </div>
                                             <div class="user-action">
                                                 <div class="form-check form-switch">
@@ -399,6 +438,23 @@
                     if (item) {
                         updateUserItemState(item, this.checked);
                         updateSelectedChips();
+                        
+                        // Toggle amount input nếu Custom split
+                        const amountContainer = item.querySelector('[data-participant-amount-container]');
+                        if (amountContainer && splitTypeCustom && splitTypeCustom.checked) {
+                            amountContainer.style.display = this.checked ? 'block' : 'none';
+                            if (this.checked) {
+                                validateAndShowTotal(true); // Tự động fill khi check participant
+                            } else {
+                                // Khi bỏ chọn, disable hidden field
+                                const userId = item.getAttribute('data-user-id');
+                                const hiddenField = document.getElementById(`hiddenParticipantAmount_${userId}`);
+                                if (hiddenField) {
+                                    hiddenField.disabled = true;
+                                    hiddenField.value = '';
+                                }
+                            }
+                        }
                     }
                 });
             });
@@ -406,10 +462,13 @@
             // Click vào item để toggle checkbox
             userItems.forEach(item => {
                 item.addEventListener('click', function(e) {
-                    // Không toggle nếu click vào checkbox hoặc nút remove chip
+                    // Không toggle nếu click vào checkbox, input số tiền, hoặc nút remove chip
                     if (e.target.type === 'checkbox' || 
                         e.target.closest('.form-check-input') ||
-                        e.target.closest('.selected-chip__remove')) {
+                        e.target.closest('.selected-chip__remove') ||
+                        e.target.closest('.participant-amount-field') ||
+                        e.target.closest('.participant-amount-input') ||
+                        e.target.closest('.input-group')) {
                         return;
                     }
                     
@@ -423,6 +482,210 @@
 
             // Khởi tạo ban đầu
             updateAllStates();
+
+            // ===== SplitType và Amount Input Handling =====
+            const splitTypeEqual = document.getElementById('splitTypeEqual');
+            const splitTypeCustom = document.getElementById('splitTypeCustom');
+            const splitTypeHidden = document.getElementById('splitTypeHidden');
+            const expenseAmountInput = document.getElementById('expenseAmount');
+            const participantAmountInputs = document.querySelectorAll('.participant-amount-field');
+            const participantAmountContainers = document.querySelectorAll('[data-participant-amount-container]');
+
+            // Hàm toggle hiển thị amount inputs
+            function toggleAmountInputs(show) {
+                participantAmountContainers.forEach(container => {
+                    const checkbox = container.closest('.user-item')?.querySelector('.participant-checkbox');
+                    if (checkbox && checkbox.checked) {
+                        container.style.display = show ? 'block' : 'none';
+                    } else {
+                        container.style.display = 'none';
+                    }
+                });
+            }
+
+            // Hàm tính tổng số tiền đã nhập
+            function calculateTotalAmount() {
+                let total = 0;
+                participantAmountInputs.forEach(input => {
+                    const checkbox = input.closest('.user-item')?.querySelector('.participant-checkbox');
+                    if (checkbox && checkbox.checked) {
+                        const value = parseFloat(input.value) || 0;
+                        total += value;
+                    }
+                });
+                return total;
+            }
+
+            // Hàm validate và hiển thị tổng tiền
+            // autoFill: true nếu được gọi từ việc nhập số tiền từng người, false nếu từ việc nhập Amount
+            function validateAndShowTotal(autoFill = true) {
+                if (!splitTypeCustom || !splitTypeCustom.checked) return;
+
+                const total = calculateTotalAmount();
+                const expenseAmount = parseFloat(expenseAmountInput?.value) || 0;
+
+                // Nếu autoFill = true (nhập số tiền từng người), LUÔN tự động điền tổng vào Amount
+                if (autoFill && expenseAmountInput && total > 0) {
+                    if (window.isAutoFillingAmount) {
+                        window.isAutoFillingAmount(true);
+                    }
+                    expenseAmountInput.value = total.toFixed(2);
+                    if (window.isAutoFillingAmount) {
+                        setTimeout(() => {
+                            window.isAutoFillingAmount(false);
+                        }, 100);
+                    }
+                }
+
+                // Sau khi auto-fill, expenseAmount sẽ bằng total
+                const finalExpenseAmount = autoFill ? total : expenseAmount;
+                const difference = Math.abs(total - finalExpenseAmount);
+
+                // Tìm hoặc tạo thông báo tổng tiền
+                let totalAmountInfo = document.getElementById('totalAmountInfo');
+                if (!totalAmountInfo) {
+                    totalAmountInfo = document.createElement('div');
+                    totalAmountInfo.id = 'totalAmountInfo';
+                    totalAmountInfo.className = 'alert alert-info mt-2';
+                    expenseAmountInput?.parentElement?.appendChild(totalAmountInfo);
+                }
+
+                if (total === 0) {
+                    totalAmountInfo.className = 'alert alert-info mt-2';
+                    totalAmountInfo.innerHTML = `<i class="bi bi-info-circle"></i> Vui lòng nhập số tiền cho từng người tham gia`;
+                } else if (difference <= 0.01) {
+                    totalAmountInfo.className = 'alert alert-success mt-2';
+                    totalAmountInfo.innerHTML = `<i class="bi bi-check-circle"></i> Tổng số tiền: <strong>${total.toLocaleString('vi-VN')} đ</strong> (Khớp với tổng chi phí)`;
+                } else if (total < finalExpenseAmount) {
+                    totalAmountInfo.className = 'alert alert-warning mt-2';
+                    totalAmountInfo.innerHTML = `<i class="bi bi-exclamation-triangle"></i> Tổng số tiền từng người: <strong>${total.toLocaleString('vi-VN')} đ</strong> / ${finalExpenseAmount.toLocaleString('vi-VN')} đ (Còn thiếu: ${(finalExpenseAmount - total).toLocaleString('vi-VN')} đ)`;
+                } else {
+                    totalAmountInfo.className = 'alert alert-danger mt-2';
+                    totalAmountInfo.innerHTML = `<i class="bi bi-exclamation-triangle"></i> Tổng số tiền từng người: <strong>${total.toLocaleString('vi-VN')} đ</strong> / ${finalExpenseAmount.toLocaleString('vi-VN')} đ (Vượt quá: ${(total - finalExpenseAmount).toLocaleString('vi-VN')} đ)`;
+                }
+            }
+
+            // Xử lý thay đổi SplitType
+            if (splitTypeEqual && splitTypeCustom && splitTypeHidden) {
+                splitTypeEqual.addEventListener('change', function() {
+                    if (this.checked) {
+                        splitTypeHidden.value = '0';
+                        toggleAmountInputs(false);
+                        // Disable tất cả hidden fields khi chuyển sang Equal
+                        document.querySelectorAll('[data-participant-amount-hidden]').forEach(field => {
+                            field.disabled = true;
+                            field.value = '';
+                        });
+                        const totalAmountInfo = document.getElementById('totalAmountInfo');
+                        if (totalAmountInfo) totalAmountInfo.remove();
+                    }
+                });
+
+                splitTypeCustom.addEventListener('change', function() {
+                    if (this.checked) {
+                        splitTypeHidden.value = '1';
+                        toggleAmountInputs(true);
+                        // Enable các hidden fields cho users đã chọn khi chuyển sang Custom
+                        checkboxes.forEach(checkbox => {
+                            if (checkbox.checked) {
+                                const userId = checkbox.value;
+                                const hiddenField = document.getElementById(`hiddenParticipantAmount_${userId}`);
+                                const inputField = document.querySelector(`.participant-amount-field[data-user-id="${userId}"]`);
+                                if (hiddenField && inputField) {
+                                    const amount = parseFloat(inputField.value) || 0;
+                                    if (amount > 0) {
+                                        hiddenField.disabled = false;
+                                        hiddenField.value = amount.toFixed(2);
+                                    } else {
+                                        // Nếu chưa có giá trị, vẫn enable nhưng để trống
+                                        hiddenField.disabled = false;
+                                    }
+                                }
+                            }
+                        });
+                        validateAndShowTotal(true); // Tự động fill khi chuyển sang Custom
+                    }
+                });
+
+                // Khởi tạo trạng thái ban đầu
+                if (splitTypeCustom.checked) {
+                    toggleAmountInputs(true);
+                    // Enable các hidden fields cho users đã chọn
+                    checkboxes.forEach(checkbox => {
+                        if (checkbox.checked) {
+                            const userId = checkbox.value;
+                            const hiddenField = document.getElementById(`hiddenParticipantAmount_${userId}`);
+                            const inputField = document.querySelector(`.participant-amount-field[data-user-id="${userId}"]`);
+                            if (hiddenField && inputField) {
+                                const amount = parseFloat(inputField.value) || 0;
+                                if (amount > 0) {
+                                    hiddenField.disabled = false;
+                                    hiddenField.value = amount.toFixed(2);
+                                } else {
+                                    hiddenField.disabled = false;
+                                }
+                            }
+                        }
+                    });
+                    validateAndShowTotal(true); // Tự động fill khi load trang với Custom
+                } else {
+                    // Nếu là Equal split, disable tất cả hidden fields
+                    document.querySelectorAll('[data-participant-amount-hidden]').forEach(field => {
+                        field.disabled = true;
+                        field.value = '';
+                    });
+                }
+            }
+
+            // Xử lý thay đổi amount input - CẬP NHẬT hidden field ngay lập tức
+            participantAmountInputs.forEach(input => {
+                input.addEventListener('click', function(e) {
+                    e.stopPropagation(); // Ngăn event bubble lên user-item
+                });
+                
+                input.addEventListener('focus', function(e) {
+                    e.stopPropagation(); // Ngăn event bubble lên user-item
+                });
+                
+                input.addEventListener('input', function() {
+                    const userId = this.getAttribute('data-user-id');
+                    const amount = parseFloat(this.value) || 0;
+                    
+                    // Tìm hidden field tương ứng và cập nhật giá trị
+                    const hiddenField = document.getElementById(`hiddenParticipantAmount_${userId}`);
+                    if (hiddenField) {
+                        if (amount > 0) {
+                            hiddenField.value = amount.toFixed(2);
+                            hiddenField.disabled = false; // Đảm bảo field được submit
+                        } else {
+                            hiddenField.value = '';
+                            hiddenField.disabled = true; // Disable nếu không có giá trị
+                        }
+                        console.log(`Updated hidden field ParticipantAmounts[${userId}] = ${hiddenField.value}`);
+                    }
+                    
+                    validateAndShowTotal(true); // true = tự động fill
+                });
+            });
+
+            // Xử lý thay đổi expense amount - chỉ validate, không tự động fill
+            if (expenseAmountInput) {
+                let isAutoFilling = false;
+                expenseAmountInput.addEventListener('input', function() {
+                    if (splitTypeCustom && splitTypeCustom.checked && !isAutoFilling) {
+                        validateAndShowTotal(false); // false = không tự động fill, chỉ validate
+                    }
+                });
+                
+                // Lưu lại reference để dùng trong validateAndShowTotal
+                window.isAutoFillingAmount = function(value) {
+                    isAutoFilling = value;
+                };
+            }
+
+            // Không cần intercept form submit nữa vì hidden fields đã có sẵn trong form
+            // Chỉ cần đảm bảo các hidden fields được enable/disable đúng cách
+            console.log('Form setup complete. Hidden fields are ready in the form.');
         });
     </script>
 
@@ -566,6 +829,17 @@
             transition: all 0.2s ease;
             border: 2px solid transparent;
             background-color: #f8f9fa;
+        }
+
+        .user-list-item .participant-amount-input,
+        .user-list-item .participant-amount-field,
+        .user-list-item .input-group {
+            cursor: default;
+            pointer-events: auto;
+        }
+
+        .user-list-item .participant-amount-field {
+            cursor: text;
         }
 
         @@media (min-width: 768px) {

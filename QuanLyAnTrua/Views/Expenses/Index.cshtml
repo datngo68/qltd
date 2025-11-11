@@ -85,6 +85,7 @@
             @foreach (var item in Model)
             {
                 var participantCount = item.Participants.Count;
+                var hasCustomAmounts = item.Participants.Any(p => p.Amount.HasValue);
                 var amountPerPerson = participantCount > 0 ? item.Amount / participantCount : 0;
                 <tr>
                     <td>@item.ExpenseDate.ToString("dd/MM/yyyy")</td>
@@ -94,9 +95,32 @@
                         <span class="badge bg-primary">@participantCount</span>
                     </td>
                     <td>
-                        @string.Join(", ", item.Participants.Select(p => p.User.Name))
+                        @if (hasCustomAmounts)
+                        {
+                            <div>
+                                @foreach (var participant in item.Participants.OrderBy(p => p.User.Name))
+                                {
+                                    <div class="small">
+                                        @participant.User.Name: <strong class="text-primary">@(participant.Amount?.ToString("N0") ?? amountPerPerson.ToString("N0")) đ</strong>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            @string.Join(", ", item.Participants.Select(p => p.User.Name))
+                        }
                     </td>
-                    <td>@amountPerPerson.ToString("N0") đ</td>
+                    <td>
+                        @if (hasCustomAmounts)
+                        {
+                            <span class="text-muted small">Khác nhau</span>
+                        }
+                        else
+                        {
+                            @amountPerPerson.ToString("N0") <text>đ</text>
+                        }
+                    </td>
                     <td>@(item.Description ?? "-")</td>
                     <td>
                         @{

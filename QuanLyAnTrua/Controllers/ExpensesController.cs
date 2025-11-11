@@ -172,9 +172,60 @@ namespace QuanLyAnTrua.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Create(ExpenseViewModel viewModel, int? groupId = null)
         {
+            // Parse ParticipantAmounts từ Request.Form nếu SplitType = Custom
+            if (viewModel.SplitType == SplitType.Custom)
+            {
+                viewModel.ParticipantAmounts = new Dictionary<int, decimal>();
+                foreach (var key in Request.Form.Keys)
+                {
+                    if (key.StartsWith("ParticipantAmounts[") && key.EndsWith("]"))
+                    {
+                        var userIdStr = key.Substring("ParticipantAmounts[".Length, key.Length - "ParticipantAmounts[".Length - 1);
+                        if (int.TryParse(userIdStr, out int userId))
+                        {
+                            var amountStr = Request.Form[key].ToString();
+                            if (decimal.TryParse(amountStr, out decimal amount))
+                            {
+                                viewModel.ParticipantAmounts[userId] = amount;
+                            }
+                        }
+                    }
+                }
+            }
+
             if (viewModel.ParticipantIds == null || !viewModel.ParticipantIds.Any())
             {
                 ModelState.AddModelError("ParticipantIds", "Vui lòng chọn ít nhất một người sử dụng");
+            }
+
+            // Validate SplitType = Custom
+            if (viewModel.SplitType == SplitType.Custom)
+            {
+                if (viewModel.ParticipantAmounts == null || !viewModel.ParticipantAmounts.Any())
+                {
+                    ModelState.AddModelError("ParticipantAmounts", "Vui lòng nhập số tiền cho từng người tham gia");
+                }
+                else
+                {
+                    // Kiểm tra tất cả participants đều có số tiền
+                    var missingAmounts = viewModel.ParticipantIds
+                        .Where(id => !viewModel.ParticipantAmounts.ContainsKey(id) || viewModel.ParticipantAmounts[id] <= 0)
+                        .ToList();
+                    
+                    if (missingAmounts.Any())
+                    {
+                        ModelState.AddModelError("ParticipantAmounts", "Vui lòng nhập số tiền cho tất cả người tham gia");
+                    }
+                    else
+                    {
+                        // Kiểm tra tổng số tiền phải bằng Expense.Amount
+                        var totalAmount = viewModel.ParticipantAmounts.Values.Sum();
+                        if (Math.Abs(totalAmount - viewModel.Amount) > 0.01m) // Cho phép sai số làm tròn 0.01
+                        {
+                            ModelState.AddModelError("ParticipantAmounts", $"Tổng số tiền của các người tham gia ({totalAmount:N0} đ) phải bằng tổng chi phí ({viewModel.Amount:N0} đ)");
+                        }
+                    }
+                }
             }
 
             // User thường chỉ có thể chọn bản thân làm payer
@@ -228,12 +279,22 @@ namespace QuanLyAnTrua.Controllers
                 // Add participants
                 if (viewModel.ParticipantIds != null)
                 {
+                    var participantCount = viewModel.ParticipantIds.Count;
+                    var amountPerPerson = participantCount > 0 ? Math.Round(viewModel.Amount / participantCount, 2) : 0;
+
                     foreach (var participantId in viewModel.ParticipantIds)
                     {
                         var participant = new ExpenseParticipant
                         {
                             ExpenseId = expense.Id,
-                            UserId = participantId
+                            UserId = participantId,
+                            // Nếu SplitType = Custom và có Amount trong ParticipantAmounts thì dùng giá trị đó
+                            // Nếu SplitType = Equal hoặc không có Amount thì để null (chia đều)
+                            Amount = viewModel.SplitType == SplitType.Custom && 
+                                     viewModel.ParticipantAmounts != null && 
+                                     viewModel.ParticipantAmounts.ContainsKey(participantId)
+                                ? viewModel.ParticipantAmounts[participantId]
+                                : null
                         };
                         _context.Add(participant);
                     }
@@ -379,6 +440,21 @@ namespace QuanLyAnTrua.Controllers
 
             var activeUsers = await userQuery.OrderBy(u => u.Name).ToListAsync();
 
+            // Xác định SplitType: nếu tất cả participants đều có Amount = null thì là Equal, ngược lại là Custom
+            var hasCustomAmounts = expense.Participants.Any(p => p.Amount.HasValue);
+            var participantAmounts = new Dictionary<int, decimal>();
+            
+            if (hasCustomAmounts)
+            {
+                foreach (var participant in expense.Participants)
+                {
+                    if (participant.Amount.HasValue)
+                    {
+                        participantAmounts[participant.UserId] = participant.Amount.Value;
+                    }
+                }
+            }
+
             var viewModel = new ExpenseViewModel
             {
                 Id = expense.Id,
@@ -387,6 +463,8 @@ namespace QuanLyAnTrua.Controllers
                 ExpenseDate = expense.ExpenseDate,
                 Description = expense.Description,
                 ParticipantIds = expense.Participants.Select(p => p.UserId).ToList(),
+                SplitType = hasCustomAmounts ? SplitType.Custom : SplitType.Equal,
+                ParticipantAmounts = participantAmounts,
                 AllUsers = activeUsers
             };
 
@@ -403,9 +481,60 @@ namespace QuanLyAnTrua.Controllers
                 return NotFound();
             }
 
+            // Parse ParticipantAmounts từ Request.Form nếu SplitType = Custom
+            if (viewModel.SplitType == SplitType.Custom)
+            {
+                viewModel.ParticipantAmounts = new Dictionary<int, decimal>();
+                foreach (var key in Request.Form.Keys)
+                {
+                    if (key.StartsWith("ParticipantAmounts[") && key.EndsWith("]"))
+                    {
+                        var userIdStr = key.Substring("ParticipantAmounts[".Length, key.Length - "ParticipantAmounts[".Length - 1);
+                        if (int.TryParse(userIdStr, out int userId))
+                        {
+                            var amountStr = Request.Form[key].ToString();
+                            if (decimal.TryParse(amountStr, out decimal amount))
+                            {
+                                viewModel.ParticipantAmounts[userId] = amount;
+                            }
+                        }
+                    }
+                }
+            }
+
             if (viewModel.ParticipantIds == null || !viewModel.ParticipantIds.Any())
             {
                 ModelState.AddModelError("ParticipantIds", "Vui lòng chọn ít nhất một người sử dụng");
+            }
+
+            // Validate SplitType = Custom
+            if (viewModel.SplitType == SplitType.Custom)
+            {
+                if (viewModel.ParticipantAmounts == null || !viewModel.ParticipantAmounts.Any())
+                {
+                    ModelState.AddModelError("ParticipantAmounts", "Vui lòng nhập số tiền cho từng người tham gia");
+                }
+                else
+                {
+                    // Kiểm tra tất cả participants đều có số tiền
+                    var missingAmounts = viewModel.ParticipantIds
+                        .Where(id => !viewModel.ParticipantAmounts.ContainsKey(id) || viewModel.ParticipantAmounts[id] <= 0)
+                        .ToList();
+                    
+                    if (missingAmounts.Any())
+                    {
+                        ModelState.AddModelError("ParticipantAmounts", "Vui lòng nhập số tiền cho tất cả người tham gia");
+                    }
+                    else
+                    {
+                        // Kiểm tra tổng số tiền phải bằng Expense.Amount
+                        var totalAmount = viewModel.ParticipantAmounts.Values.Sum();
+                        if (Math.Abs(totalAmount - viewModel.Amount) > 0.01m) // Cho phép sai số làm tròn 0.01
+                        {
+                            ModelState.AddModelError("ParticipantAmounts", $"Tổng số tiền của các người tham gia ({totalAmount:N0} đ) phải bằng tổng chi phí ({viewModel.Amount:N0} đ)");
+                        }
+                    }
+                }
             }
 
             if (ModelState.IsValid)
@@ -477,18 +606,35 @@ namespace QuanLyAnTrua.Controllers
                         _context.Remove(participant);
                     }
 
-                    // Add new participants
-                    var participantsToAdd = newParticipantIds
-                        .Where(pid => !existingParticipantIds.Contains(pid))
-                        .ToList();
-                    foreach (var participantId in participantsToAdd)
+                    // Update existing participants và add new ones
+                    foreach (var participantId in newParticipantIds)
                     {
-                        var participant = new ExpenseParticipant
+                        var existingParticipant = expense.Participants.FirstOrDefault(p => p.UserId == participantId);
+                        
+                        if (existingParticipant != null)
                         {
-                            ExpenseId = expense.Id,
-                            UserId = participantId
-                        };
-                        _context.Add(participant);
+                            // Update Amount cho participant đã tồn tại
+                            existingParticipant.Amount = viewModel.SplitType == SplitType.Custom && 
+                                                       viewModel.ParticipantAmounts != null && 
+                                                       viewModel.ParticipantAmounts.ContainsKey(participantId)
+                                ? viewModel.ParticipantAmounts[participantId]
+                                : null;
+                        }
+                        else
+                        {
+                            // Add new participant
+                            var participant = new ExpenseParticipant
+                            {
+                                ExpenseId = expense.Id,
+                                UserId = participantId,
+                                Amount = viewModel.SplitType == SplitType.Custom && 
+                                         viewModel.ParticipantAmounts != null && 
+                                         viewModel.ParticipantAmounts.ContainsKey(participantId)
+                                    ? viewModel.ParticipantAmounts[participantId]
+                                    : null
+                            };
+                            _context.Add(participant);
+                        }
                     }
 
                     _context.Update(expense);
@@ -619,7 +765,6 @@ namespace QuanLyAnTrua.Controllers
                 }
 
                 var expenseDate = expense.ExpenseDate.ToString("dd/MM/yyyy");
-                var amountPerPerson = participantIds.Count > 0 ? Math.Round(expense.Amount / participantIds.Count, 2) : 0;
                 var description = string.IsNullOrEmpty(expense.Description) ? "Không có mô tả" : expense.Description;
 
                 // Tạo hoặc lấy SharedReport cho Group theo tháng/năm của chi phí
@@ -668,6 +813,11 @@ namespace QuanLyAnTrua.Controllers
                     publicViewUrl = Url.Action("PublicView", "Reports", new { token = token }, Request.Scheme)!;
                 }
 
+                // Load expense với participants để lấy Amount
+                var expenseWithParticipants = await _context.Expenses
+                    .Include(e => e.Participants)
+                    .FirstOrDefaultAsync(e => e.Id == expense.Id);
+
                 // Gửi message cho từng participant
                 foreach (var participant in participants)
                 {
@@ -676,14 +826,36 @@ namespace QuanLyAnTrua.Controllers
 
                     try
                     {
+                        // Tính số tiền participant phải trả
+                        decimal participantAmount = 0;
+                        var expenseParticipant = expenseWithParticipants?.Participants.FirstOrDefault(p => p.UserId == participant.Id);
+                        if (expenseParticipant != null)
+                        {
+                            if (expenseParticipant.Amount.HasValue)
+                            {
+                                // Dùng số tiền cụ thể
+                                participantAmount = expenseParticipant.Amount.Value;
+                            }
+                            else
+                            {
+                                // Chia đều: tính số tiền còn lại sau khi trừ các custom amounts
+                                var participantsWithoutAmount = expenseWithParticipants!.Participants.Where(p => !p.Amount.HasValue).ToList();
+                                var totalCustomAmount = expenseWithParticipants.Participants.Where(p => p.Amount.HasValue).Sum(p => p.Amount.Value);
+                                var remainingAmount = expense.Amount - totalCustomAmount;
+                                participantAmount = participantsWithoutAmount.Count > 0 
+                                    ? Math.Round(remainingAmount / participantsWithoutAmount.Count, 2) 
+                                    : 0;
+                            }
+                        }
+
                         // Tạo message với URL trực tiếp (không dùng parse mode)
                         // Telegram sẽ tự động detect URL và làm cho nó clickable
                         var message = $"💰 Thông báo chi phí mới\n\n" +
                                      $"📅 Ngày: {expenseDate}\n" +
-                                     $"💵 Số tiền: {expense.Amount:N0} đ\n" +
+                                     $"💵 Tổng chi phí: {expense.Amount:N0} đ\n" +
                                      $"👤 Người chi: {payer.Name}\n" +
                                      $"📝 Mô tả: {description}\n\n" +
-                                     $"Bạn cần thanh toán: {amountPerPerson:N0} đ\n\n" +
+                                     $"Bạn cần thanh toán: {participantAmount:N0} đ\n\n" +
                                      $"🔗 Xem chi tiết và thanh toán:\n{publicViewUrl}";
 
                         // Log URL để debug

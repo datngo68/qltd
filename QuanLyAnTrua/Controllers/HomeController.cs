@@ -140,10 +140,28 @@ public class HomeController : Controller
 
                     foreach (var expense in weekExpenses)
                     {
-                        var participantCount = expense.Participants.Count;
-                        if (participantCount > 0 && expense.Participants.Any(ep => ep.UserId == user.Id))
+                        if (expense.Participants.Any(ep => ep.UserId == user.Id))
                         {
-                            totalAmount += expense.Amount / participantCount;
+                            var participant = expense.Participants.FirstOrDefault(ep => ep.UserId == user.Id);
+                            if (participant != null)
+                            {
+                                if (participant.Amount.HasValue)
+                                {
+                                    // Dùng số tiền cụ thể từ ExpenseParticipant
+                                    totalAmount += participant.Amount.Value;
+                                }
+                                else
+                                {
+                                    // Chia đều: tính số tiền còn lại sau khi trừ các custom amounts
+                                    var participantsWithoutAmount = expense.Participants.Where(p => !p.Amount.HasValue).ToList();
+                                    var totalCustomAmount = expense.Participants.Where(p => p.Amount.HasValue).Sum(p => p.Amount.Value);
+                                    var remainingAmount = expense.Amount - totalCustomAmount;
+                                    var amountPerPerson = participantsWithoutAmount.Count > 0 
+                                        ? Math.Round(remainingAmount / participantsWithoutAmount.Count, 2) 
+                                        : 0;
+                                    totalAmount += amountPerPerson;
+                                }
+                            }
                         }
                         if (expense.PayerId == user.Id)
                         {
@@ -224,10 +242,28 @@ public class HomeController : Controller
 
                     foreach (var expense in monthExpenses)
                     {
-                        var participantCount = expense.Participants.Count;
-                        if (participantCount > 0 && expense.Participants.Any(ep => ep.UserId == user.Id))
+                        if (expense.Participants.Any(ep => ep.UserId == user.Id))
                         {
-                            totalAmount += expense.Amount / participantCount;
+                            var participant = expense.Participants.FirstOrDefault(ep => ep.UserId == user.Id);
+                            if (participant != null)
+                            {
+                                if (participant.Amount.HasValue)
+                                {
+                                    // Dùng số tiền cụ thể từ ExpenseParticipant
+                                    totalAmount += participant.Amount.Value;
+                                }
+                                else
+                                {
+                                    // Chia đều: tính số tiền còn lại sau khi trừ các custom amounts
+                                    var participantsWithoutAmount = expense.Participants.Where(p => !p.Amount.HasValue).ToList();
+                                    var totalCustomAmount = expense.Participants.Where(p => p.Amount.HasValue).Sum(p => p.Amount.Value);
+                                    var remainingAmount = expense.Amount - totalCustomAmount;
+                                    var amountPerPerson = participantsWithoutAmount.Count > 0 
+                                        ? Math.Round(remainingAmount / participantsWithoutAmount.Count, 2) 
+                                        : 0;
+                                    totalAmount += amountPerPerson;
+                                }
+                            }
                         }
                         if (expense.PayerId == user.Id)
                         {

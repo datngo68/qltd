@@ -13,6 +13,13 @@ namespace QuanLyAnTrua.Models
         [Column(Order = 1)]
         public int UserId { get; set; }
 
+        /// <summary>
+        /// Số tiền của participant này. Nếu null thì chia đều.
+        /// </summary>
+        [Column(TypeName = "decimal(18,2)")]
+        [Display(Name = "Số tiền")]
+        public decimal? Amount { get; set; }
+
         // Navigation properties
         [ForeignKey("ExpenseId")]
         public virtual Expense Expense { get; set; } = null!;

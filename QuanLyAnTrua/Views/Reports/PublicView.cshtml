@@ -956,7 +956,55 @@
                                     <td>@expense.Amount.ToString("N0") đ</td>
                                     <td>@expense.PayerName</td>
                                     <td>@string.Join(", ", expense.ParticipantNames)</td>
-                                    <td>@expense.AmountPerPerson.ToString("N0") đ</td>
+                                    <td>
+                                        @if (expense.ParticipantAmounts != null && expense.ParticipantAmounts.Any())
+                                        {
+                                            @* Có custom amounts: hiển thị từng người với số tiền của họ *@
+                                            <div>
+                                                @{
+                                                    var totalCustomAmount = expense.ParticipantAmounts.Sum(pa => pa.Value);
+                                                    var remainingAmount = expense.Amount - totalCustomAmount;
+                                                    var participantsWithCustomAmount = expense.ParticipantAmounts.Count;
+                                                    var participantsWithoutCustom = expense.ParticipantNames.Count - participantsWithCustomAmount;
+                                                    var equalAmount = participantsWithoutCustom > 0 ? Math.Round(remainingAmount / participantsWithoutCustom, 2) : 0;
+                                                    
+                                                    // Hiển thị những người có custom amount
+                                                    foreach (var participantAmount in expense.ParticipantAmounts)
+                                                    {
+                                                        var participantName = expense.ParticipantIdToName.ContainsKey(participantAmount.Key) 
+                                                            ? expense.ParticipantIdToName[participantAmount.Key] 
+                                                            : expense.ParticipantNames.FirstOrDefault();
+                                                        <div><strong>@participantName:</strong> @participantAmount.Value.ToString("N0") đ</div>
+                                                    }
+                                                    
+                                                    // Hiển thị những người chia đều (nếu có)
+                                                    if (participantsWithoutCustom > 0 && equalAmount > 0)
+                                                    {
+                                                        var participantsWithEqual = expense.ParticipantIdToName
+                                                            .Where(p => !expense.ParticipantAmounts.ContainsKey(p.Key))
+                                                            .Select(p => p.Value)
+                                                            .ToList();
+                                                        foreach (var participantName in participantsWithEqual)
+                                                        {
+                                                            <div><strong>@participantName:</strong> @equalAmount.ToString("N0") đ</div>
+                                                        }
+                                                    }
+                                                }
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            @* Chia đều: hiển thị số tiền/người *@
+                                            @if (expense.ParticipantNames.Count > 0)
+                                            {
+                                                @((expense.Amount / expense.ParticipantNames.Count).ToString("N0")) <text>đ</text>
+                                            }
+                                            else
+                                            {
+                                                <text>0 đ</text>
+                                            }
+                                        }
+                                    </td>
                                     <td>@(expense.Description ?? "-")</td>
                                 </tr>
                             }

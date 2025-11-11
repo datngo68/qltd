@@ -77,6 +77,15 @@ namespace QuanLyAnTrua.Models.ViewModels
         public string? Description { get; set; }
         public List<string> ParticipantNames { get; set; } = new List<string>();
         public decimal AmountPerPerson { get; set; }
+        /// <summary>
+        /// Dictionary lưu số tiền của từng participant (UserId -> Amount)
+        /// Nếu có thì là custom amounts, nếu không thì chia đều
+        /// </summary>
+        public Dictionary<int, decimal> ParticipantAmounts { get; set; } = new Dictionary<int, decimal>();
+        /// <summary>
+        /// Dictionary mapping UserId -> UserName để dễ tra cứu trong view
+        /// </summary>
+        public Dictionary<int, string> ParticipantIdToName { get; set; } = new Dictionary<int, string>();
     }
 }
 
