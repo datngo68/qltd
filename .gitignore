@@ -115,6 +115,10 @@ $RECYCLE.BIN/
 logs/
 *.log
 
+# Docker data persistence
+data/
+avatars/
+
 # Environment variables
 .env
 .env.local

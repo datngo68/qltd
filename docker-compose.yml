@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  quanlyantrua:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: quanlyantrua-app
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    volumes:
+      # Database persistence
+      - ./data:/app/data
+      # Logs persistence
+      - ./logs:/app/logs
+      # Avatar uploads persistence
+      - ./avatars:/app/wwwroot/avatars
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:5000
+      # Database connection
+      - ConnectionStrings__DefaultConnection=Data Source=/app/data/QuanLyAnTrua.db
+      # Avatar upload path (relative to app root)
+      - Avatar__UploadPath=wwwroot/avatars
+      # Logging
+      - Logging__LogLevel__Default=Information
+      - Logging__LogLevel__Microsoft.AspNetCore=Warning
+      # Casso webhook (set these in .env file or override in production)
+      - Casso__WebhookSecret=${CASSO_WEBHOOK_SECRET:-}
+      - Casso__SecureToken=${CASSO_SECURE_TOKEN:-}
+      - Casso__WebhookVersion=V2
+      # Telegram bot (set these in .env file)
+      - Telegram__BotToken=${TELEGRAM_BOT_TOKEN:-}
+      - Telegram__BotUsername=${TELEGRAM_BOT_USERNAME:-thongbaoantrua_bot}
+      # Payment settings
+      - Payment__DescriptionPrefix=TTF
+      - Payment__DescriptionSuffix=END
+      - Payment__DescriptionSeparator=NHANBI
+      # Parking payment settings
+      - ParkingPayment__DefaultLicensePlate=15D1-41770
+      - ParkingPayment__Prices__Motorbike=70000
+      - ParkingPayment__Prices__Car=700000
+      - ParkingPayment__Prices__CarOvernight=900000
+      - ParkingPayment__CompanyAccount__BankName=BIDV
+      - ParkingPayment__CompanyAccount__AccountNumber=8601276666
+      - ParkingPayment__CompanyAccount__AccountHolder=Công ty TNHH MTV Dịch vụ Xây dựng Thịnh Thái
+      - ParkingPayment__StaffAccount__BankName=MBBank
+      - ParkingPayment__StaffAccount__AccountNumber=0936.187.187
+      - ParkingPayment__StaffAccount__AccountHolder=Nguyễn Thanh Thảo
+    networks:
+      - quanlyantrua-network
+
+networks:
+  quanlyantrua-network:
+    driver: bridge
+
