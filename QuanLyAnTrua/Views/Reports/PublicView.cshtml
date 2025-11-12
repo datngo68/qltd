@@ -903,7 +903,10 @@
 
                 @if (Model.UserDebts.Any(u => u.DebtDetails.Any(d => d.RemainingAmount > 0)))
                 {
-                    @* <h3 class="section-title mb-3"><i class="bi bi-arrow-left-right"></i> Chi tiết ai nợ ai (còn nợ)</h3> *@
+                    @* <h3 class="section-title mb-3"><i class="bi bi-arrow-left-right"></i> Chi tiết các khoản nợ còn lại</h3> *@
+                    <div class="alert alert-info mb-3" role="alert">
+                        <i class="bi bi-info-circle"></i> <strong>Lưu ý:</strong> Bảng này chỉ hiển thị các khoản nợ chưa thanh toán, không phải lịch sử chuyển tiền.
+                    </div>
                     <div class="table-responsive mb-4">
                         <table class="table table-striped table-bordered">
                             <thead class="table-light">
@@ -913,7 +916,7 @@
                                     <th>Người được nợ</th>
                                     <th>Số tiền ban đầu</th>
                                     <th>Số tiền còn nợ</th>
-                                    <th>Ngày</th>
+                                    <th>Ngày phát sinh</th>
                                     <th>Mô tả</th>
                                 </tr>
                             </thead>
