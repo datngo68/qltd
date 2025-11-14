@@ -23,36 +23,15 @@ namespace QuanLyAnTrua.Controllers
         // GET: Users
         public async Task<IActionResult> Index(int? groupId = null)
         {
-            var query = _context.Users.AsQueryable();
+            // Sử dụng helper để filter users
+            var query = QueryFilterHelper.FilterUsersByGroup(_context.Users, HttpContext, groupId);
 
-            // SuperAdmin có thể filter theo nhóm
-            if (SessionHelper.IsSuperAdmin(HttpContext))
+            // Load groups cho dropdown nếu cần
+            var groups = await QueryFilterHelper.LoadGroupsForDropdownAsync(_context, HttpContext);
+            if (groups != null)
             {
-                if (groupId.HasValue)
-                {
-                    query = query.Where(u => u.GroupId == groupId.Value);
-                }
-                // Nếu không chọn nhóm thì hiển thị tất cả
-
-                // Load groups cho dropdown
-                ViewBag.Groups = await _context.Groups
-                    .Where(g => g.IsActive)
-                    .OrderBy(g => g.Name)
-                    .ToListAsync();
+                ViewBag.Groups = groups;
                 ViewBag.SelectedGroupId = groupId;
-            }
-            else
-            {
-                var currentGroupId = SessionHelper.GetGroupId(HttpContext);
-                if (currentGroupId.HasValue)
-                {
-                    query = query.Where(u => u.GroupId == currentGroupId.Value);
-                }
-                else
-                {
-                    // Admin không có group, không thấy user nào
-                    query = query.Where(u => false);
-                }
             }
 
             return View(await query.OrderBy(u => u.Name).ToListAsync());
@@ -68,26 +47,8 @@ namespace QuanLyAnTrua.Controllers
             ViewBag.CanCreateAdmin = isAdmin || isSuperAdmin; // Admin và SuperAdmin đều có thể tạo Admin
             ViewBag.Banks = Helpers.QRCodeHelper.GetSupportedBanks().OrderBy(b => b.Name).ToList();
 
-            // Load groups cho SuperAdmin hoặc Admin
-            if (isSuperAdmin)
-            {
-                ViewBag.Groups = await _context.Groups
-                    .Where(g => g.IsActive)
-                    .OrderBy(g => g.Name)
-                    .ToListAsync();
-            }
-            else if (isAdmin)
-            {
-                // Admin chỉ thấy nhóm của mình
-                var groupId = SessionHelper.GetGroupId(HttpContext);
-                if (groupId.HasValue)
-                {
-                    ViewBag.Groups = await _context.Groups
-                        .Where(g => g.Id == groupId.Value && g.IsActive)
-                        .OrderBy(g => g.Name)
-                        .ToListAsync();
-                }
-            }
+            // Load groups cho dropdown nếu cần
+            ViewBag.Groups = await QueryFilterHelper.LoadGroupsForDropdownAsync(_context, HttpContext);
 
             return View();
         }
@@ -251,20 +212,7 @@ namespace QuanLyAnTrua.Controllers
             ViewBag.IsAdmin = isAdmin;
             ViewBag.CanCreateAdmin = isAdmin || isSuperAdmin;
             ViewBag.Banks = Helpers.QRCodeHelper.GetSupportedBanks().OrderBy(b => b.Name).ToList();
-            if (isSuperAdmin)
-            {
-                ViewBag.Groups = await _context.Groups
-                    .Where(g => g.IsActive)
-                    .OrderBy(g => g.Name)
-                    .ToListAsync();
-            }
-            else if (isAdmin && groupId.HasValue)
-            {
-                ViewBag.Groups = await _context.Groups
-                    .Where(g => g.Id == groupId.Value && g.IsActive)
-                    .OrderBy(g => g.Name)
-                    .ToListAsync();
-            }
+            ViewBag.Groups = await QueryFilterHelper.LoadGroupsForDropdownAsync(_context, HttpContext);
             return View(user);
         }
 
@@ -285,14 +233,10 @@ namespace QuanLyAnTrua.Controllers
             // Check permission: SuperAdmin edit được tất cả, Admin chỉ edit users trong nhóm
             var isSuperAdmin = SessionHelper.IsSuperAdmin(HttpContext);
             var isAdmin = SessionHelper.IsAdmin(HttpContext);
-            if (!isSuperAdmin)
+            if (!QueryFilterHelper.CanAccessGroup(HttpContext, user.GroupId))
             {
-                var groupId = SessionHelper.GetGroupId(HttpContext);
-                if (!groupId.HasValue || user.GroupId != groupId.Value)
-                {
-                    TempData["ErrorMessage"] = "Bạn không có quyền truy cập user này.";
-                    return RedirectToAction(nameof(Index));
-                }
+                TempData["ErrorMessage"] = "Bạn không có quyền truy cập user này.";
+                return RedirectToAction(nameof(Index));
             }
 
             ViewBag.IsSuperAdmin = isSuperAdmin;
@@ -300,27 +244,10 @@ namespace QuanLyAnTrua.Controllers
             ViewBag.CanCreateAdmin = isAdmin || isSuperAdmin;
             ViewBag.Banks = Helpers.QRCodeHelper.GetSupportedBanks().OrderBy(b => b.Name).ToList();
 
-            // Load groups cho SuperAdmin hoặc Admin
-            if (isSuperAdmin)
-            {
-                ViewBag.Groups = await _context.Groups
-                    .Where(g => g.IsActive)
-                    .OrderBy(g => g.Name)
-                    .ToListAsync();
-            }
-            else if (isAdmin)
-            {
-                var groupId = SessionHelper.GetGroupId(HttpContext);
-                if (groupId.HasValue)
-                {
-                    ViewBag.Groups = await _context.Groups
-                        .Where(g => g.Id == groupId.Value && g.IsActive)
-                        .OrderBy(g => g.Name)
-                        .ToListAsync();
-                }
-            }
+            // Load groups cho dropdown nếu cần
+            ViewBag.Groups = await QueryFilterHelper.LoadGroupsForDropdownAsync(_context, HttpContext);
 
-            return View(user);
+            return View();
         }
 
         // POST: Users/Edit/5
