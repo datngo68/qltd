@@ -23,13 +23,11 @@ namespace QuanLyAnTrua.Controllers
             var currentYear = year ?? DateTime.Now.Year;
             var currentMonth = month ?? DateTime.Now.Month;
 
-            // Load groups cho dropdown (chỉ SuperAdmin)
-            if (SessionHelper.IsSuperAdmin(HttpContext))
+            // Load groups cho dropdown nếu cần
+            var groups = await QueryFilterHelper.LoadGroupsForDropdownAsync(_context, HttpContext);
+            if (groups != null)
             {
-                ViewBag.Groups = await _context.Groups
-                    .Where(g => g.IsActive)
-                    .OrderBy(g => g.Name)
-                    .ToListAsync();
+                ViewBag.Groups = groups;
                 ViewBag.SelectedGroupId = groupId;
             }
 
@@ -58,35 +56,15 @@ namespace QuanLyAnTrua.Controllers
                 UserId = userId ?? 0
             };
 
-            var userQuery = _context.Users.Where(u => u.IsActive).AsQueryable();
-            if (!SessionHelper.IsSuperAdmin(HttpContext))
+            var userQuery = QueryFilterHelper.FilterUsersByGroup(_context.Users, HttpContext, activeOnly: true);
+
+            // Set default UserId cho user thường nếu không có GroupId
+            if (SessionHelper.IsUser(HttpContext) && !SessionHelper.GetGroupId(HttpContext).HasValue)
             {
-                var groupId = SessionHelper.GetGroupId(HttpContext);
-                if (groupId.HasValue)
+                var currentUserId = SessionHelper.GetUserId(HttpContext);
+                if (currentUserId.HasValue)
                 {
-                    userQuery = userQuery.Where(u => u.GroupId == groupId.Value);
-                }
-                else
-                {
-                    // User thường có thể không có GroupId, cho phép chọn bản thân
-                    if (SessionHelper.IsUser(HttpContext))
-                    {
-                        var currentUserId = SessionHelper.GetUserId(HttpContext);
-                        if (currentUserId.HasValue)
-                        {
-                            userQuery = userQuery.Where(u => u.Id == currentUserId.Value);
-                            // Set default UserId cho user thường
-                            viewModel.UserId = currentUserId.Value;
-                        }
-                        else
-                        {
-                            userQuery = userQuery.Where(u => false);
-                        }
-                    }
-                    else
-                    {
-                        userQuery = userQuery.Where(u => false);
-                    }
+                    viewModel.UserId = currentUserId.Value;
                 }
             }
 
@@ -188,19 +166,7 @@ namespace QuanLyAnTrua.Controllers
                 }
             }
 
-            var userQuery = _context.Users.Where(u => u.IsActive).AsQueryable();
-            if (!SessionHelper.IsSuperAdmin(HttpContext))
-            {
-                var groupId = SessionHelper.GetGroupId(HttpContext);
-                if (groupId.HasValue)
-                {
-                    userQuery = userQuery.Where(u => u.GroupId == groupId.Value);
-                }
-                else
-                {
-                    userQuery = userQuery.Where(u => false);
-                }
-            }
+            var userQuery = QueryFilterHelper.FilterUsersByGroup(_context.Users, HttpContext, activeOnly: true);
 
             ViewBag.Users = await userQuery.OrderBy(u => u.Name).ToListAsync();
             ViewBag.Creditors = await userQuery.OrderBy(u => u.Name).ToListAsync();
@@ -223,28 +189,12 @@ namespace QuanLyAnTrua.Controllers
             }
 
             // Check permission
-            if (!SessionHelper.IsSuperAdmin(HttpContext))
+            if (!QueryFilterHelper.CanAccessGroup(HttpContext, monthlyPayment.GroupId))
             {
-                var groupId = SessionHelper.GetGroupId(HttpContext);
-                if (!groupId.HasValue || monthlyPayment.GroupId != groupId.Value)
-                {
-                    return Forbid();
-                }
+                return Forbid();
             }
 
-            var userQuery = _context.Users.Where(u => u.IsActive).AsQueryable();
-            if (!SessionHelper.IsSuperAdmin(HttpContext))
-            {
-                var groupId = SessionHelper.GetGroupId(HttpContext);
-                if (groupId.HasValue)
-                {
-                    userQuery = userQuery.Where(u => u.GroupId == groupId.Value);
-                }
-                else
-                {
-                    userQuery = userQuery.Where(u => false);
-                }
-            }
+            var userQuery = QueryFilterHelper.FilterUsersByGroup(_context.Users, HttpContext, activeOnly: true);
 
             ViewBag.Users = await userQuery.OrderBy(u => u.Name).ToListAsync();
             ViewBag.Creditors = await userQuery.OrderBy(u => u.Name).ToListAsync();
@@ -314,19 +264,7 @@ namespace QuanLyAnTrua.Controllers
                 return RedirectToAction(nameof(Index), new { year = monthlyPayment.Year, month = monthlyPayment.Month });
             }
 
-            var userQuery = _context.Users.Where(u => u.IsActive).AsQueryable();
-            if (!SessionHelper.IsSuperAdmin(HttpContext))
-            {
-                var groupId = SessionHelper.GetGroupId(HttpContext);
-                if (groupId.HasValue)
-                {
-                    userQuery = userQuery.Where(u => u.GroupId == groupId.Value);
-                }
-                else
-                {
-                    userQuery = userQuery.Where(u => false);
-                }
-            }
+            var userQuery = QueryFilterHelper.FilterUsersByGroup(_context.Users, HttpContext, activeOnly: true);
 
             ViewBag.Users = await userQuery.OrderBy(u => u.Name).ToListAsync();
             ViewBag.Creditors = await userQuery.OrderBy(u => u.Name).ToListAsync();

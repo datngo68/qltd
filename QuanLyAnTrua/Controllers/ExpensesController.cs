@@ -28,33 +28,15 @@ namespace QuanLyAnTrua.Controllers
                     .ThenInclude(ep => ep.User)
                 .AsQueryable();
 
-            // SuperAdmin có thể filter theo nhóm
-            if (SessionHelper.IsSuperAdmin(HttpContext))
-            {
-                if (groupId.HasValue)
-                {
-                    query = query.Where(e => e.GroupId == groupId.Value);
-                }
-                // Nếu không chọn nhóm thì hiển thị tất cả
+            // Sử dụng helper để filter theo group
+            query = QueryFilterHelper.FilterByGroup(query, HttpContext, groupId);
 
-                // Load groups cho dropdown
-                ViewBag.Groups = await _context.Groups
-                    .Where(g => g.IsActive)
-                    .OrderBy(g => g.Name)
-                    .ToListAsync();
-                ViewBag.SelectedGroupId = groupId;
-            }
-            else
+            // Load groups cho dropdown nếu cần
+            var groups = await QueryFilterHelper.LoadGroupsForDropdownAsync(_context, HttpContext);
+            if (groups != null)
             {
-                var currentGroupId = SessionHelper.GetGroupId(HttpContext);
-                if (currentGroupId.HasValue)
-                {
-                    query = query.Where(e => e.GroupId == currentGroupId.Value);
-                }
-                else
-                {
-                    query = query.Where(e => false); // Admin không có group, không thấy expense nào
-                }
+                ViewBag.Groups = groups;
+                ViewBag.SelectedGroupId = groupId;
             }
 
             // Lọc theo tháng/năm (áp dụng cho tất cả người dùng)
@@ -93,52 +75,15 @@ namespace QuanLyAnTrua.Controllers
         // GET: Expenses/Create
         public async Task<IActionResult> Create(int? groupId = null)
         {
-            var query = _context.Users.Where(u => u.IsActive).AsQueryable();
+            // Sử dụng helper để filter users
+            var query = QueryFilterHelper.FilterUsersByGroup(_context.Users, HttpContext, groupId, activeOnly: true);
 
-            // SuperAdmin có thể filter theo nhóm
-            if (SessionHelper.IsSuperAdmin(HttpContext))
+            // Load groups cho dropdown nếu cần
+            var groups = await QueryFilterHelper.LoadGroupsForDropdownAsync(_context, HttpContext);
+            if (groups != null)
             {
-                if (groupId.HasValue)
-                {
-                    query = query.Where(u => u.GroupId == groupId.Value);
-                }
-                // Nếu không chọn nhóm thì hiển thị tất cả
-
-                // Load groups cho dropdown
-                ViewBag.Groups = await _context.Groups
-                    .Where(g => g.IsActive)
-                    .OrderBy(g => g.Name)
-                    .ToListAsync();
+                ViewBag.Groups = groups;
                 ViewBag.SelectedGroupId = groupId;
-            }
-            else
-            {
-                // Filter users by GroupId
-                var currentGroupId = SessionHelper.GetGroupId(HttpContext);
-                if (currentGroupId.HasValue)
-                {
-                    query = query.Where(u => u.GroupId == currentGroupId.Value);
-                }
-                else
-                {
-                    // User thường có thể không có GroupId, cho phép chọn bản thân
-                    if (SessionHelper.IsUser(HttpContext))
-                    {
-                        var currentUserId = SessionHelper.GetUserId(HttpContext);
-                        if (currentUserId.HasValue)
-                        {
-                            query = query.Where(u => u.Id == currentUserId.Value);
-                        }
-                        else
-                        {
-                            query = query.Where(u => false);
-                        }
-                    }
-                    else
-                    {
-                        query = query.Where(u => false);
-                    }
-                }
             }
 
             var activeUsers = await query.OrderBy(u => u.Name).ToListAsync();
@@ -175,22 +120,7 @@ namespace QuanLyAnTrua.Controllers
             // Parse ParticipantAmounts từ Request.Form nếu SplitType = Custom
             if (viewModel.SplitType == SplitType.Custom)
             {
-                viewModel.ParticipantAmounts = new Dictionary<int, decimal>();
-                foreach (var key in Request.Form.Keys)
-                {
-                    if (key.StartsWith("ParticipantAmounts[") && key.EndsWith("]"))
-                    {
-                        var userIdStr = key.Substring("ParticipantAmounts[".Length, key.Length - "ParticipantAmounts[".Length - 1);
-                        if (int.TryParse(userIdStr, out int userId))
-                        {
-                            var amountStr = Request.Form[key].ToString();
-                            if (decimal.TryParse(amountStr, out decimal amount))
-                            {
-                                viewModel.ParticipantAmounts[userId] = amount;
-                            }
-                        }
-                    }
-                }
+                viewModel.ParticipantAmounts = ExpenseFormHelper.ParseParticipantAmounts(Request.Form);
             }
 
             if (viewModel.ParticipantIds == null || !viewModel.ParticipantIds.Any())
@@ -198,35 +128,8 @@ namespace QuanLyAnTrua.Controllers
                 ModelState.AddModelError("ParticipantIds", "Vui lòng chọn ít nhất một người sử dụng");
             }
 
-            // Validate SplitType = Custom
-            if (viewModel.SplitType == SplitType.Custom)
-            {
-                if (viewModel.ParticipantAmounts == null || !viewModel.ParticipantAmounts.Any())
-                {
-                    ModelState.AddModelError("ParticipantAmounts", "Vui lòng nhập số tiền cho từng người tham gia");
-                }
-                else
-                {
-                    // Kiểm tra tất cả participants đều có số tiền
-                    var missingAmounts = viewModel.ParticipantIds
-                        .Where(id => !viewModel.ParticipantAmounts.ContainsKey(id) || viewModel.ParticipantAmounts[id] <= 0)
-                        .ToList();
-
-                    if (missingAmounts.Any())
-                    {
-                        ModelState.AddModelError("ParticipantAmounts", "Vui lòng nhập số tiền cho tất cả người tham gia");
-                    }
-                    else
-                    {
-                        // Kiểm tra tổng số tiền phải bằng Expense.Amount
-                        var totalAmount = viewModel.ParticipantAmounts.Values.Sum();
-                        if (Math.Abs(totalAmount - viewModel.Amount) > 0.01m) // Cho phép sai số làm tròn 0.01
-                        {
-                            ModelState.AddModelError("ParticipantAmounts", $"Tổng số tiền của các người tham gia ({totalAmount:N0} đ) phải bằng tổng chi phí ({viewModel.Amount:N0} đ)");
-                        }
-                    }
-                }
-            }
+            // Validate SplitType = Custom sử dụng helper
+            ExpenseFormHelper.ValidateCustomSplitAmounts(viewModel, ModelState);
 
             // User thường chỉ có thể chọn bản thân làm payer
             var currentUserId = SessionHelper.GetUserId(HttpContext);
@@ -279,22 +182,16 @@ namespace QuanLyAnTrua.Controllers
                 // Add participants
                 if (viewModel.ParticipantIds != null)
                 {
-                    var participantCount = viewModel.ParticipantIds.Count;
-                    var amountPerPerson = participantCount > 0 ? Math.Round(viewModel.Amount / participantCount, 2) : 0;
-
                     foreach (var participantId in viewModel.ParticipantIds)
                     {
                         var participant = new ExpenseParticipant
                         {
                             ExpenseId = expense.Id,
                             UserId = participantId,
-                            // Nếu SplitType = Custom và có Amount trong ParticipantAmounts thì dùng giá trị đó
-                            // Nếu SplitType = Equal hoặc không có Amount thì để null (chia đều)
-                            Amount = viewModel.SplitType == SplitType.Custom &&
-                                     viewModel.ParticipantAmounts != null &&
-                                     viewModel.ParticipantAmounts.ContainsKey(participantId)
-                                ? viewModel.ParticipantAmounts[participantId]
-                                : null
+                            Amount = ExpenseFormHelper.CalculateParticipantAmount(
+                                viewModel.SplitType, 
+                                participantId, 
+                                viewModel.ParticipantAmounts)
                         };
                         _context.Add(participant);
                     }
@@ -314,48 +211,14 @@ namespace QuanLyAnTrua.Controllers
             }
 
             // Reload users for dropdown
-            var userQueryReload = _context.Users.Where(u => u.IsActive).AsQueryable();
+            var userQueryReload = QueryFilterHelper.FilterUsersByGroup(_context.Users, HttpContext, groupId, activeOnly: true);
 
-            // SuperAdmin có thể filter theo nhóm
-            if (SessionHelper.IsSuperAdmin(HttpContext))
+            // Load groups cho dropdown nếu cần
+            var groupsReload = await QueryFilterHelper.LoadGroupsForDropdownAsync(_context, HttpContext);
+            if (groupsReload != null)
             {
-                // Load groups cho dropdown
-                ViewBag.Groups = await _context.Groups
-                    .Where(g => g.IsActive)
-                    .OrderBy(g => g.Name)
-                    .ToListAsync();
+                ViewBag.Groups = groupsReload;
                 ViewBag.SelectedGroupId = null; // Reset khi validation error
-
-                // Nếu có groupId trong form, filter theo groupId
-                // Note: Cần thêm groupId vào form nếu muốn giữ lại khi validation error
-            }
-            else
-            {
-                var currentGroupId = SessionHelper.GetGroupId(HttpContext);
-                if (currentGroupId.HasValue)
-                {
-                    userQueryReload = userQueryReload.Where(u => u.GroupId == currentGroupId.Value);
-                }
-                else
-                {
-                    // User thường có thể không có GroupId, cho phép chọn bản thân
-                    if (SessionHelper.IsUser(HttpContext))
-                    {
-                        var currentUserIdReload = SessionHelper.GetUserId(HttpContext);
-                        if (currentUserIdReload.HasValue)
-                        {
-                            userQueryReload = userQueryReload.Where(u => u.Id == currentUserIdReload.Value);
-                        }
-                        else
-                        {
-                            userQueryReload = userQueryReload.Where(u => false);
-                        }
-                    }
-                    else
-                    {
-                        userQueryReload = userQueryReload.Where(u => false);
-                    }
-                }
             }
 
             viewModel.AllUsers = await userQueryReload.OrderBy(u => u.Name).ToListAsync();
@@ -382,60 +245,32 @@ namespace QuanLyAnTrua.Controllers
 
             // Check permission
             var currentUserId = SessionHelper.GetUserId(HttpContext);
-            if (!SessionHelper.IsSuperAdmin(HttpContext))
+            if (!QueryFilterHelper.CanAccessGroup(HttpContext, expense.GroupId))
             {
-                var currentGroupId = SessionHelper.GetGroupId(HttpContext);
-                if (!currentGroupId.HasValue || expense.GroupId != currentGroupId.Value)
+                TempData["ErrorMessage"] = "Bạn không có quyền truy cập chi phí này.";
+                return RedirectToAction(nameof(Index));
+            }
+
+            // User thường chỉ có thể sửa expense của chính mình (expense mà mình là payer)
+            if (SessionHelper.IsUser(HttpContext) && currentUserId.HasValue)
+            {
+                if (expense.PayerId != currentUserId.Value)
                 {
-                    TempData["ErrorMessage"] = "Bạn không có quyền truy cập chi phí này.";
+                    TempData["ErrorMessage"] = "Bạn chỉ có thể sửa chi phí của chính mình.";
                     return RedirectToAction(nameof(Index));
                 }
-
-                // User thường chỉ có thể sửa expense của chính mình (expense mà mình là payer)
-                if (SessionHelper.IsUser(HttpContext) && currentUserId.HasValue)
-                {
-                    if (expense.PayerId != currentUserId.Value)
-                    {
-                        TempData["ErrorMessage"] = "Bạn chỉ có thể sửa chi phí của chính mình.";
-                        return RedirectToAction(nameof(Index));
-                    }
-                }
             }
 
-            var userQuery = _context.Users.Where(u => u.IsActive).AsQueryable();
+            // Nếu SuperAdmin và không có groupId, mặc định filter theo group của expense
+            var effectiveGroupId = groupId ?? expense.GroupId;
+            var userQuery = QueryFilterHelper.FilterUsersByGroup(_context.Users, HttpContext, effectiveGroupId, activeOnly: true);
 
-            // SuperAdmin có thể filter theo nhóm
-            if (SessionHelper.IsSuperAdmin(HttpContext))
+            // Load groups cho dropdown nếu cần
+            var groups = await QueryFilterHelper.LoadGroupsForDropdownAsync(_context, HttpContext);
+            if (groups != null)
             {
-                if (groupId.HasValue)
-                {
-                    userQuery = userQuery.Where(u => u.GroupId == groupId.Value);
-                }
-                else if (expense.GroupId.HasValue)
-                {
-                    // Nếu không chọn groupId, mặc định filter theo group của expense
-                    userQuery = userQuery.Where(u => u.GroupId == expense.GroupId.Value);
-                }
-                // Nếu không có groupId thì hiển thị tất cả
-
-                // Load groups cho dropdown
-                ViewBag.Groups = await _context.Groups
-                    .Where(g => g.IsActive)
-                    .OrderBy(g => g.Name)
-                    .ToListAsync();
-                ViewBag.SelectedGroupId = groupId ?? expense.GroupId;
-            }
-            else
-            {
-                var currentGroupId = SessionHelper.GetGroupId(HttpContext);
-                if (currentGroupId.HasValue)
-                {
-                    userQuery = userQuery.Where(u => u.GroupId == currentGroupId.Value);
-                }
-                else
-                {
-                    userQuery = userQuery.Where(u => false);
-                }
+                ViewBag.Groups = groups;
+                ViewBag.SelectedGroupId = effectiveGroupId;
             }
 
             var activeUsers = await userQuery.OrderBy(u => u.Name).ToListAsync();
@@ -484,22 +319,7 @@ namespace QuanLyAnTrua.Controllers
             // Parse ParticipantAmounts từ Request.Form nếu SplitType = Custom
             if (viewModel.SplitType == SplitType.Custom)
             {
-                viewModel.ParticipantAmounts = new Dictionary<int, decimal>();
-                foreach (var key in Request.Form.Keys)
-                {
-                    if (key.StartsWith("ParticipantAmounts[") && key.EndsWith("]"))
-                    {
-                        var userIdStr = key.Substring("ParticipantAmounts[".Length, key.Length - "ParticipantAmounts[".Length - 1);
-                        if (int.TryParse(userIdStr, out int userId))
-                        {
-                            var amountStr = Request.Form[key].ToString();
-                            if (decimal.TryParse(amountStr, out decimal amount))
-                            {
-                                viewModel.ParticipantAmounts[userId] = amount;
-                            }
-                        }
-                    }
-                }
+                viewModel.ParticipantAmounts = ExpenseFormHelper.ParseParticipantAmounts(Request.Form);
             }
 
             if (viewModel.ParticipantIds == null || !viewModel.ParticipantIds.Any())
@@ -507,35 +327,8 @@ namespace QuanLyAnTrua.Controllers
                 ModelState.AddModelError("ParticipantIds", "Vui lòng chọn ít nhất một người sử dụng");
             }
 
-            // Validate SplitType = Custom
-            if (viewModel.SplitType == SplitType.Custom)
-            {
-                if (viewModel.ParticipantAmounts == null || !viewModel.ParticipantAmounts.Any())
-                {
-                    ModelState.AddModelError("ParticipantAmounts", "Vui lòng nhập số tiền cho từng người tham gia");
-                }
-                else
-                {
-                    // Kiểm tra tất cả participants đều có số tiền
-                    var missingAmounts = viewModel.ParticipantIds
-                        .Where(id => !viewModel.ParticipantAmounts.ContainsKey(id) || viewModel.ParticipantAmounts[id] <= 0)
-                        .ToList();
-
-                    if (missingAmounts.Any())
-                    {
-                        ModelState.AddModelError("ParticipantAmounts", "Vui lòng nhập số tiền cho tất cả người tham gia");
-                    }
-                    else
-                    {
-                        // Kiểm tra tổng số tiền phải bằng Expense.Amount
-                        var totalAmount = viewModel.ParticipantAmounts.Values.Sum();
-                        if (Math.Abs(totalAmount - viewModel.Amount) > 0.01m) // Cho phép sai số làm tròn 0.01
-                        {
-                            ModelState.AddModelError("ParticipantAmounts", $"Tổng số tiền của các người tham gia ({totalAmount:N0} đ) phải bằng tổng chi phí ({viewModel.Amount:N0} đ)");
-                        }
-                    }
-                }
-            }
+            // Validate SplitType = Custom sử dụng helper
+            ExpenseFormHelper.ValidateCustomSplitAmounts(viewModel, ModelState);
 
             if (ModelState.IsValid)
             {
@@ -606,7 +399,7 @@ namespace QuanLyAnTrua.Controllers
                         _context.Remove(participant);
                     }
 
-                    // Update existing participants và add new ones
+                    // Update participants và add new ones
                     foreach (var participantId in newParticipantIds)
                     {
                         var existingParticipant = expense.Participants.FirstOrDefault(p => p.UserId == participantId);
@@ -614,11 +407,10 @@ namespace QuanLyAnTrua.Controllers
                         if (existingParticipant != null)
                         {
                             // Update Amount cho participant đã tồn tại
-                            existingParticipant.Amount = viewModel.SplitType == SplitType.Custom &&
-                                                       viewModel.ParticipantAmounts != null &&
-                                                       viewModel.ParticipantAmounts.ContainsKey(participantId)
-                                ? viewModel.ParticipantAmounts[participantId]
-                                : null;
+                            existingParticipant.Amount = ExpenseFormHelper.CalculateParticipantAmount(
+                                viewModel.SplitType, 
+                                participantId, 
+                                viewModel.ParticipantAmounts);
                         }
                         else
                         {
@@ -627,11 +419,10 @@ namespace QuanLyAnTrua.Controllers
                             {
                                 ExpenseId = expense.Id,
                                 UserId = participantId,
-                                Amount = viewModel.SplitType == SplitType.Custom &&
-                                         viewModel.ParticipantAmounts != null &&
-                                         viewModel.ParticipantAmounts.ContainsKey(participantId)
-                                    ? viewModel.ParticipantAmounts[participantId]
-                                    : null
+                                Amount = ExpenseFormHelper.CalculateParticipantAmount(
+                                    viewModel.SplitType, 
+                                    participantId, 
+                                    viewModel.ParticipantAmounts)
                             };
                             _context.Add(participant);
                         }
@@ -656,44 +447,24 @@ namespace QuanLyAnTrua.Controllers
             }
 
             // Reload users for dropdown
-            var userQuery = _context.Users.Where(u => u.IsActive).AsQueryable();
-
-            // SuperAdmin có thể filter theo nhóm
-            if (SessionHelper.IsSuperAdmin(HttpContext))
+            // Nếu SuperAdmin và không có groupId, lấy expense để lấy groupId mặc định
+            if (SessionHelper.IsSuperAdmin(HttpContext) && !groupId.HasValue)
             {
-                if (groupId.HasValue)
+                var expenseForGroup = await _context.Expenses.FindAsync(id);
+                if (expenseForGroup != null && expenseForGroup.GroupId.HasValue)
                 {
-                    userQuery = userQuery.Where(u => u.GroupId == groupId.Value);
+                    groupId = expenseForGroup.GroupId;
                 }
-                else
-                {
-                    // Lấy expense để lấy groupId mặc định
-                    var expense = await _context.Expenses.FindAsync(id);
-                    if (expense != null && expense.GroupId.HasValue)
-                    {
-                        userQuery = userQuery.Where(u => u.GroupId == expense.GroupId.Value);
-                        groupId = expense.GroupId;
-                    }
-                }
-
-                // Load groups cho dropdown
-                ViewBag.Groups = await _context.Groups
-                    .Where(g => g.IsActive)
-                    .OrderBy(g => g.Name)
-                    .ToListAsync();
-                ViewBag.SelectedGroupId = groupId; // Giữ lại groupId khi validation error
             }
-            else
+
+            var userQuery = QueryFilterHelper.FilterUsersByGroup(_context.Users, HttpContext, groupId, activeOnly: true);
+
+            // Load groups cho dropdown nếu cần
+            var groupsReload = await QueryFilterHelper.LoadGroupsForDropdownAsync(_context, HttpContext);
+            if (groupsReload != null)
             {
-                var currentGroupId = SessionHelper.GetGroupId(HttpContext);
-                if (currentGroupId.HasValue)
-                {
-                    userQuery = userQuery.Where(u => u.GroupId == currentGroupId.Value);
-                }
-                else
-                {
-                    userQuery = userQuery.Where(u => false);
-                }
+                ViewBag.Groups = groupsReload;
+                ViewBag.SelectedGroupId = groupId; // Giữ lại groupId khi validation error
             }
 
             viewModel.AllUsers = await userQuery.OrderBy(u => u.Name).ToListAsync();
